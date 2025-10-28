@@ -1,0 +1,280 @@
+Mon objectif principal est qe l'app fonctionne totalement hors reseau (meme l'enregistrement et les connexions ) juste que chaque fois toutes les tables sur tout les appareils doivent etre synchroniser au serveur principale , etre coherent ::
+
+utilise une architecture de sync bidirectionnel
+
+📱 App Mobile/Desktop
+   ↓
+🗄️ Base de données locale (SQLite/IndexedDB)
+   ↕️ (sync bidirectionnelle)
+☁️ Serveur Principal (API REST/GraphQL)
+   ↓
+🗃️ Base de données centrale (PostgreSQL/MySQL)
+
+### **Scénario 1 : Nouvel Utilisateur**
+```
+1. User ouvre l'app
+2. "Créer un compte" (ONLINE requis)
+   ├─ Email + Password
+   ├─ Envoi au serveur → Success
+   ├─ "Créez un PIN pour accès rapide" → 1234
+   └─ Téléchargement des données → Prêt!
+
+3. Prochains logins:
+   ├─ ONLINE: PIN → Sync auto
+   └─ OFFLINE: PIN → Accès local
+```
+
+================================================================
+Disposition des fonctionnaliter sur les ecran
+=================================================================
+pour le pdg on va utiliser simplement un menu de navigation rattacher a toutes les pages qui va permettre de naviguer entre les fonctionnaliter : sur le dashboard  , sera afficher la liste des receptions de produits d'une part et la liste des inventaires d'autre part et enfin la liste des sessions de ventes (un nombre limiter d'element par groupe), les barre de filtre pour chacun des 3 groupes
+
+pour le pointeur je veux qu'on ai simplement une barre de fonctionnaliter qui utilise les icones pour indiquer la fonctionnaliter : "reception/retour/deconnexion"
+sur le tableau de bord il y'aura simplement un formulaire deja pret a remplir pour enregistrer une reception 
+
+pour le serveur je veux au dashboard ;a Liste produits reçus .de faxon universel une barre de fonctionnaliter orienter icone me permettant de naviguer entre mes modules "inventaire,session de caisse ,visualisation receptions,visualisation retours"
+
+l'app doit etre hyper facile a manipuler
+il doit avoir a tout moment un point en haut a droite de l'ecran qui indiquera le status de la connexion au serveur (vert: connecter - rouge:deconnecter - jaune:en cours de connexion)
+
+les vues doivent etre hyper responsive (pc-tablette-mobile-smart tv)l'app sera exclusivement en franxais pour un debut
+
+le style et le design doivent etre a couper le soufle
+
+code moi tout le Frontend(react native+electron) comme un chef et a la fin tu vas creer un fichier bash contenant les commandes a executer pour installer le projet et initaliser tte les dependances
+
+
+🧾 Résumé projet — Application Boulangerie / Pâtisserie (Frontend)
+🎯 Objectif
+
+Développer une application de gestion de boulangerie-pâtisserie qui fonctionne :
+
+en réseau local (Wi-Fi, sans Internet)
+
+avec un serveur Laravel (déjà prêt) qui expose des API JSON
+
+utilisable à la fois sur tablettes (Android) et ordinateur du PDG (Windows PC)
+
+⚙️ Architecture globale
+
+Backend : Laravel (serveur local, IP fixe ex: http://192.168.0.10/api)
+
+Frontend : react native+electon (avec Expo)
+
+Déploiement :
+
+Tablettes → APK Android
+
+PC → App Electron (EXE) basée sur react native+electon Web
+
+🧱 Stack technique front-end
+Fonction	Technologie
+Framework principal	react native+electon (Expo)
+Mode web / desktop	react native+electon Web + Electron
+Communication API	Axios vers backend Laravel
+Stockage local (offline)	SQLite via expo-sqlite
+Détection réseau	@react-native-community/netinfo
+Gestion offline/sync	Code custom (SQLite → Laravel API)
+Design responsive	Flexbox + Dimensions API
+
+voici la description de l'application
+
+on va developper une app pour une boulangerie patisserie
+elle va fonctionner en offline 
+le pdg utilisera sur sa machine (serveur)
+le pointeur sur une tablette
+les vendeurs sur une tablette
+on va faire evoluer l'application au fur et a mesure
+
+pour l'instant on veut la premiere fonctionnaliter (flux de produit patisserie)
+
+premierement on a des produits (defini par leur nom , prix , categorie(boulangerie ou patisserie)
+
+ensuite on a les pointeurs , les vendeurs et le pdg
+
+les pointeur rexoivent les produits des producteurs et les passe au vendeurs direct
+les pointeurs sont les hommes de confiance
+il y'a un seul vendeur a la fois pour chaque categorie en place (xa veut dire qu'a un moment precis il y'a un seul vendeur qui vend pour chaque categorie " un seul patisserie et un seul boulangerie)
+
+lorsque le pointeur declare qu'il a recu un produit d'un producteur on assigne directement le produit et la quantite recu au vendeur qui est entrain de travailler pour la categorie du produit
+le pointeur enregistre aussi les retour de produits (les produits peuvent etre retourner pour differente raison (gater , perimer ...))
+lorsque le pointeur enregistre un retour de produit le serveur responsable du retour est automatiquement le serveur connecter pour la categorie du produit en question et le retour est directement lier au serveur
+le pointeur peut modifier a les infos relative a une reception (qui modifiera aussi au niveau du serveur)
+mais il ne peut plus modifier lorsque le serveur n'est plus connecter ou lorsque un verrou logique a ete declencher (par le pdg dans ce cas))
+le vendeur n'a que 3  chose a faire avec l'application (l'inventaire)
+
+l'inventaire est l'operation realiser a chaque fois qu'il y'a changement de vendeur:
+il consiste au serveur sortant de preciser pour chaque produit la quantite laisser a son depart
+le vendeur entrant voit alors cela et consulte la liste qui s'es former au fur et  a mesure de l'ajout et ensuite les deux valide l'operation en  entrant leur code pin respectif
+a rappeler que c'est le serveur connecter qui fait l'inventaire et il est directement considerer comme le serveur sortant et il precise a chaque fois qui est le serveur entrant
+et apres l'operation d'inventaire reussi on deconnecte directement le vendeur sortant et on connecte le vendeur entrant et le systeme le marque automatiquement comme le vendeur actif pour la categorie en question
+
+chaque vendeur a deux operation d'inventaire un quand il arrive en tant qu'entrant et un quand il s'en va en tant que sortant
+
+le vendeur peut creer session de vente qui est en effet une journee de vente
+pour creer une session de vente le vendeur precise trois montant : le montant obtenu pour les ventes(fond de vente) , le montant trouver dans orange money , le montant trouver dans mtn money
+par defaut tout ces montant sont a 0
+
+la session de caisse est fermer par le pdg
+
+enfin le serveur peut visualiser la liste des entrer de la journee (pour verifier que le pointeur ne se soit pas tromper vu que chaque reception du pointeur creer automatiquement une entrer dans la table du vendeur et chaque modification aussi)
+a
+
+le pdg
+c'est le boss 
+il a 6 fonctionnaliter
+1-visualiser la liste du flux de produit
+
+la liste de flux de produit est une liste simple qui pour chaque serveur affiche
+
+pour chaque produit , la quantite trouver en arrivant (via l'inventaire) , la quantite recu pendant le journee (recu du pointeur) , la quantite retourner , la quantite restante au depart (2e inventaire) , la quantite vendu calculer (entreer+trouver-retour-restant)
+
+2-modifier toutes les infos dans le cas ou il  ya une erreur (une reception , un retour , un inventaire ... et cette modification doit se repercuter sur les tables qui en dependent quand c'est le cas
+
+3-fermer une session de vente : le pdg precise simplement le montant verser par le vendeur , le montant final dans mobile money ,le montant final dans orange money
+apres avoir specifier tout cela le manquant est automatiquement calculer en utilisant la formule Manquant = (somme total de vente - Fond de vente) - (Montant versé + Diff OM + Diff MTN)
+
+4-CRUD et activation/desactivation sur les utilisateur (employer)
+5-CRUD sur le produits (en precisant a chaque fois la categories)
+un utilisateur doit un role (pdg,producteur,pointeur,vendeur boulangerie, vendeur patisserie)
+
+6-visualiser et imprimer les liste importantes (flux produit , session de vente)
+tu vas developper un controlleur WorkpaceSwitcherController qui sera utiliser lors des login
+
+on va travailler toujours sur une architecture baser responsabiliter
+
+les services pour la logique metier (ils renvoient des json) , deux controlleur (API et l'autre normale qui renvoie les vues blade) mais qui appele le meme service
+
+en effet le controlleur qui renvoie les json sera utiliser par react native+electon et le controlleur pc sera utiliser pour la partie web
+
+pour s'enregistrer dans le systeme , si l'utilisateur precise qu'il est pdg il devra entrer un code qui le prouve , le code sera configurer en clair dans la base de donner par le developpeur
+
+
+
+dans le dashboard du pointeur je veux que ce soit directement une interface lui permettant d'enregistrer des reception
+dans le dashboard du vendeur je veux que ce soit directement la liste des produits qu'il a recu (obtenu des entreer du pointeur)
+
+l'application doit etre de rang International , de niveau Legende et de Performance maximale
+
+les palettes de couleur doivent etre coherente et le theme principale est tout simplement la couleur doreer du pain
+
+
+les tables
+
+public function up(): void
+    {
+        // Table des produits
+        Schema::create('produits', function (Blueprint $table) {
+            $table->id();
+            $table->string('nom');
+            $table->decimal('prix', 10, 2);
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->boolean('actif')->default(true);
+            $table->timestamps();
+        });
+
+        // Table des vendeurs actifs par catégorie
+        Schema::create('vendeurs_actifs', function (Blueprint $table) {
+            $table->id();
+            $table->enum('categorie', ['boulangerie', 'patisserie'])->unique();
+            $table->foreignId('vendeur_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('connecte_a')->nullable();
+            $table->timestamps();
+        });
+
+        // Table des réceptions du pointeur
+        Schema::create('receptions_pointeur', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('pointeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('producteur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite');
+            $table->foreignId('vendeur_assigne_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->boolean('verrou')->default(false);
+            $table->timestamp('date_reception');
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
+        // Table des retours de produits
+        Schema::create('retours_produits', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('pointeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('vendeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite');
+            $table->enum('raison', ['gate', 'perime', 'defectueux', 'autre']);
+            $table->text('description')->nullable();
+            $table->boolean('verrou')->default(false);
+            $table->timestamp('date_retour');
+            $table->timestamps();
+        });
+
+        // Table des inventaires
+        Schema::create('inventaires', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('vendeur_sortant_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('vendeur_entrant_id')->constrained('users')->onDelete('cascade');
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->boolean('valide_sortant')->default(false);
+            $table->boolean('valide_entrant')->default(false);
+            $table->timestamp('date_inventaire');
+            $table->timestamps();
+        });
+
+        // Table des détails d'inventaire
+        Schema::create('inventaire_details', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('inventaire_id')->constrained('inventaires')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite_restante');
+            $table->timestamps();
+        });
+
+        // Table des sessions de vente
+        Schema::create('sessions_vente', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('vendeur_id')->constrained('users')->onDelete('cascade');
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->decimal('fond_vente', 10, 2)->default(0);
+            $table->decimal('orange_money_initial', 10, 2)->default(0);
+            $table->decimal('mtn_money_initial', 10, 2)->default(0);
+            $table->decimal('montant_verse', 10, 2)->nullable();
+            $table->decimal('orange_money_final', 10, 2)->nullable();
+            $table->decimal('mtn_money_final', 10, 2)->nullable();
+            $table->decimal('manquant', 10, 2)->nullable();
+            $table->enum('statut', ['ouverte', 'fermee'])->default('ouverte');
+            $table->foreignId('fermee_par')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('date_ouverture');
+            $table->timestamp('date_fermeture')->nullable();
+            $table->timestamps();
+        });
+
+       
+
+        // Table de configuration PDG
+        Schema::create('config_pdg', function (Blueprint $table) {
+            $table->id();
+            $table->string('code_inscription_pdg');
+            $table->timestamps();
+        });
+
+        // Insérer le code PDG par défaut
+        DB::table('config_pdg')->insert([
+            'code_inscription_pdg' => 'PDG2025SECURE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+    Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('numero_telephone')->unique();
+            $table->enum('role', ['pdg', 'pointeur', 'vendeur_boulangerie', 'vendeur_patisserie', 'producteur']);
+            $table->string('code_pin', 6);
+            $table->boolean('actif')->default(true);
+            $table->string('preferred_language', 2)->default('fr');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+

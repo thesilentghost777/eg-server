@@ -21,6 +21,7 @@ class User extends Authenticatable
         'numero_telephone',
         'actif',
         'preferred_language',
+        'synced_clients'
     ];
 
     /**

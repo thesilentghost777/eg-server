@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use App\Models\Produit;
@@ -8,34 +7,38 @@ use App\Models\RetourProduit;
 use App\Models\Inventaire;
 use App\Models\InventaireDetail;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class FluxProduitService
 {
     public function getFluxParVendeur($vendeurId, $date = null)
     {
         $date = $date ?? now()->toDateString();
+        $dateCarbon = Carbon::parse($date);
         
-        // Récupérer l'inventaire de début (vendeur entrant)
-        $inventaireDebut = Inventaire::where('vendeur_entrant_id', $vendeurId)
-            ->whereDate('date_inventaire', $date)
-            ->with('details.produit')
-            ->first();
+        // Récupérer l'inventaire de début
+        // Chercher l'inventaire où le vendeur ENTRE (devient actif)
+        // Cela peut être sur la date demandée OU la veille (pour les shifts de nuit)
+        $inventaireDebut = $this->trouverInventaireDebut($vendeurId, $dateCarbon);
         
-        // Récupérer l'inventaire de fin (vendeur sortant)
-        $inventaireFin = Inventaire::where('vendeur_sortant_id', $vendeurId)
-            ->whereDate('date_inventaire', $date)
-            ->with('details.produit')
-            ->first();
+        // Récupérer l'inventaire de fin
+        // Chercher l'inventaire où le vendeur SORT (fin de shift)
+        // Cela peut être sur la date demandée OU le lendemain (pour les shifts de nuit)
+        $inventaireFin = $this->trouverInventaireFin($vendeurId, $dateCarbon);
         
-        // Récupérer toutes les réceptions du jour
+        // Déterminer la période réelle du flux
+        $dateDebut = $inventaireDebut ? Carbon::parse($inventaireDebut->date_inventaire) : $dateCarbon->copy()->startOfDay();
+        $dateFin = $inventaireFin ? Carbon::parse($inventaireFin->date_inventaire) : $dateCarbon->copy()->endOfDay();
+        
+        // Récupérer toutes les réceptions entre le début et la fin du flux
         $receptions = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
-            ->whereDate('date_reception', $date)
+            ->whereBetween('date_reception', [$dateDebut, $dateFin])
             ->with('produit')
             ->get();
         
-        // Récupérer tous les retours du jour
+        // Récupérer tous les retours entre le début et la fin du flux
         $retours = RetourProduit::where('vendeur_id', $vendeurId)
-            ->whereDate('date_retour', $date)
+            ->whereBetween('date_retour', [$dateDebut, $dateFin])
             ->with('produit')
             ->get();
         
@@ -81,9 +84,67 @@ class FluxProduitService
             ];
         }
         
-        return $flux;
+        return [
+            'periode' => [
+                'debut' => $inventaireDebut ? $inventaireDebut->date_inventaire : null,
+                'fin' => $inventaireFin ? $inventaireFin->date_inventaire : null,
+            ],
+            'flux' => $flux
+        ];
     }
-
+    
+    /**
+     * Trouve l'inventaire de début pour un vendeur
+     * Cherche d'abord sur la date demandée, puis sur la veille
+     */
+    private function trouverInventaireDebut($vendeurId, Carbon $date)
+    {
+        // D'abord chercher sur la date demandée
+        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+            ->whereDate('date_inventaire', $date)
+            ->with('details.produit')
+            ->first();
+        
+        if ($inventaire) {
+            return $inventaire;
+        }
+        
+        // Si pas trouvé, chercher sur la veille (pour les shifts de nuit)
+        $dateVeille = $date->copy()->subDay();
+        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+            ->whereDate('date_inventaire', $dateVeille)
+            ->with('details.produit')
+            ->first();
+        
+        return $inventaire;
+    }
+    
+    /**
+     * Trouve l'inventaire de fin pour un vendeur
+     * Cherche d'abord sur la date demandée, puis sur le lendemain
+     */
+    private function trouverInventaireFin($vendeurId, Carbon $date)
+    {
+        // D'abord chercher sur la date demandée
+        $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+            ->whereDate('date_inventaire', $date)
+            ->with('details.produit')
+            ->first();
+        
+        if ($inventaire) {
+            return $inventaire;
+        }
+        
+        // Si pas trouvé, chercher sur le lendemain (pour les shifts de nuit)
+        $dateLendemain = $date->copy()->addDay();
+        $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+            ->whereDate('date_inventaire', $dateLendemain)
+            ->with('details.produit')
+            ->first();
+        
+        return $inventaire;
+    }
+    
     public function getFluxTous($date = null)
     {
         $date = $date ?? now()->toDateString();
@@ -97,7 +158,7 @@ class FluxProduitService
         foreach ($vendeurs as $vendeur) {
             $fluxTous[$vendeur->id] = [
                 'vendeur' => $vendeur,
-                'flux' => $this->getFluxParVendeur($vendeur->id, $date),
+                'flux_data' => $this->getFluxParVendeur($vendeur->id, $date),
             ];
         }
         

@@ -9,7 +9,8 @@ use App\Http\Controllers\Api\InventaireApiController;
 use App\Http\Controllers\Api\SessionVenteApiController;
 use App\Http\Controllers\Api\FluxProduitApiController;
 use App\Http\Controllers\Api\UserApiController;
-
+use App\Http\Controllers\Api\PdgApiController;
+use App\Http\Controllers\Api\SyncApiController;
 /*
 |--------------------------------------------------------------------------
 | API Routes - Boulangerie Pâtisserie
@@ -20,6 +21,16 @@ use App\Http\Controllers\Api\UserApiController;
 Route::get('/test', function () {
     return response()->json(['message' => 'The ghost is in the shadow.']);
 });
+
+//route de synchronisation
+Route::prefix('sync')->group(function () {
+        Route::get('/pull', [SyncApiController::class, 'pull']);
+        Route::post('/push', [SyncApiController::class, 'push']);
+        Route::get('/status', [SyncApiController::class, 'status']);
+        Route::post('/ack', [SyncApiController::class, 'acknowledgement']);
+    });
+
+
 // Routes publiques
 Route::prefix('auth')->group(function () {
     Route::post('/inscription', [AuthApiController::class, 'inscription']);
@@ -34,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/deconnexion', [AuthApiController::class, 'deconnexion']);
         Route::get('/me', [AuthApiController::class, 'me']);
     });
+
+    
 
     // Produits (PDG uniquement pour créer/modifier)
     Route::prefix('produits')->group(function () {
@@ -113,4 +126,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/toggle-actif', [UserApiController::class, 'toggleActif']);
         Route::delete('/{id}', [UserApiController::class, 'destroy']);
     });
+
+    Route::prefix('pdg')->middleware(['auth:sanctum', 'role:pdg'])->group(function () {
+    
+    // Dashboard
+    Route::get('/dashboard', [PdgApiController::class, 'dashboard']);
+    
+    // Filtrage des données
+    Route::get('/receptions', [PdgApiController::class, 'getReceptions']);
+    Route::get('/inventaires', [PdgApiController::class, 'getInventaires']);
+    Route::get('/sessions-vente', [PdgApiController::class, 'getSessionsVente']);
+    
+    // Flux opérationnel
+    Route::get('/flux-operationnel', [PdgApiController::class, 'getFluxOperationnel']);
+    Route::get('/flux-operationnel/imprimer', [PdgApiController::class, 'imprimerFluxOperationnel']);
+    
+    // Sessions de vente détaillées
+    Route::get('/sessions-vente-detaillees', [PdgApiController::class, 'getSessionsVenteDetaillees']);
+    Route::get('/sessions-vente-detaillees/imprimer', [PdgApiController::class, 'imprimerSessionsVenteDetaillees']);
+    Route::get('/sessions-vente/{id}/imprimer', [PdgApiController::class, 'imprimerSessionVente']);
+    
+    // Statistiques et analyses
+    Route::get('/statistiques', [PdgApiController::class, 'getStatistiques']);
+    Route::get('/vendeurs-performance', [PdgApiController::class, 'getVendeursPerformance']);
 });
+});
+

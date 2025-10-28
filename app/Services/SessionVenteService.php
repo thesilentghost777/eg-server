@@ -406,4 +406,50 @@ class SessionVenteService
 
         return $query->paginate(20);
     }
+
+    /**
+ * Modifier une session de vente
+ */
+public function modifierSession($sessionId, array $data, $pdgId)
+{
+    DB::beginTransaction();
+    try {
+        $session = SessionVente::findOrFail($sessionId);
+        
+        // Si la session est fermée, recalculer le manquant
+        if ($session->statut === 'fermee') {
+            $ventesTotales = $this->calculerVentesTotales($session);
+            
+            $diffOM = $data['orange_money_final'] - $data['orange_money_initial'];
+            $diffMTN = $data['mtn_money_final'] - $data['mtn_money_initial'];
+            
+            $manquant = ($ventesTotales + $data['fond_vente']) -
+                ($data['montant_verse'] + $diffOM + $diffMTN);
+            
+            $data['manquant'] = $manquant;
+        }
+        
+        $session->update($data);
+        
+        DB::commit();
+        return $session->load(['vendeur', 'fermeePar']);
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Erreur lors de la modification de session", [
+            'session_id' => $sessionId,
+            'error' => $e->getMessage()
+        ]);
+        throw $e;
+    }
+}
+
+/**
+ * Obtenir une session par ID
+ */
+public function getSessionById($id)
+{
+    return SessionVente::with(['vendeur', 'fermeePar'])->findOrFail($id);
+}
+
 }

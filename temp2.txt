@@ -1,0 +1,2682 @@
+ Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('numero_telephone')->unique();
+            $table->enum('role', ['pdg', 'pointeur', 'vendeur_boulangerie', 'vendeur_patisserie', 'producteur']);
+            $table->string('code_pin', 6);
+            $table->boolean('actif')->default(true);
+            $table->string('preferred_language', 2)->default('fr');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+        
+        <?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        // Table des produits
+        Schema::create('produits', function (Blueprint $table) {
+            $table->id();
+            $table->string('nom');
+            $table->decimal('prix', 10, 2);
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->boolean('actif')->default(true);
+            $table->timestamps();
+        });
+
+        // Table des vendeurs actifs par catégorie
+        Schema::create('vendeurs_actifs', function (Blueprint $table) {
+            $table->id();
+            $table->enum('categorie', ['boulangerie', 'patisserie'])->unique();
+            $table->foreignId('vendeur_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('connecte_a')->nullable();
+            $table->timestamps();
+        });
+
+        // Table des réceptions du pointeur
+        Schema::create('receptions_pointeur', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('pointeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('producteur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite');
+            $table->foreignId('vendeur_assigne_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->boolean('verrou')->default(false);
+            $table->timestamp('date_reception');
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
+        // Table des retours de produits
+        Schema::create('retours_produits', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('pointeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('vendeur_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite');
+            $table->enum('raison', ['gate', 'perime', 'defectueux', 'autre']);
+            $table->text('description')->nullable();
+            $table->boolean('verrou')->default(false);
+            $table->timestamp('date_retour');
+            $table->timestamps();
+        });
+
+        // Table des inventaires
+        Schema::create('inventaires', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('vendeur_sortant_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('vendeur_entrant_id')->constrained('users')->onDelete('cascade');
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->boolean('valide_sortant')->default(false);
+            $table->boolean('valide_entrant')->default(false);
+            $table->timestamp('date_inventaire');
+            $table->timestamps();
+        });
+
+        // Table des détails d'inventaire
+        Schema::create('inventaire_details', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('inventaire_id')->constrained('inventaires')->onDelete('cascade');
+            $table->foreignId('produit_id')->constrained('produits')->onDelete('cascade');
+            $table->integer('quantite_restante');
+            $table->timestamps();
+        });
+
+        // Table des sessions de vente
+        Schema::create('sessions_vente', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('vendeur_id')->constrained('users')->onDelete('cascade');
+            $table->enum('categorie', ['boulangerie', 'patisserie']);
+            $table->decimal('fond_vente', 10, 2)->default(0);
+            $table->decimal('orange_money_initial', 10, 2)->default(0);
+            $table->decimal('mtn_money_initial', 10, 2)->default(0);
+            $table->decimal('montant_verse', 10, 2)->nullable();
+            $table->decimal('orange_money_final', 10, 2)->nullable();
+            $table->decimal('mtn_money_final', 10, 2)->nullable();
+            $table->decimal('manquant', 10, 2)->nullable();
+            $table->enum('statut', ['ouverte', 'fermee'])->default('ouverte');
+            $table->foreignId('fermee_par')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('date_ouverture');
+            $table->timestamp('date_fermeture')->nullable();
+            $table->timestamps();
+        });
+
+       
+
+        // Table de configuration PDG
+        Schema::create('config_pdg', function (Blueprint $table) {
+            $table->id();
+            $table->string('code_inscription_pdg');
+            $table->timestamps();
+        });
+
+        // Insérer le code PDG par défaut
+        DB::table('config_pdg')->insert([
+            'code_inscription_pdg' => 'PDG2025SECURE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    public function down(): void
+    {   
+        Schema::dropIfExists('config_pdg');
+        Schema::dropIfExists('sessions_vente');
+        Schema::dropIfExists('inventaire_details');
+        Schema::dropIfExists('inventaires');
+        Schema::dropIfExists('retours_produits');
+        Schema::dropIfExists('receptions_pointeur');
+        Schema::dropIfExists('vendeurs_actifs');
+        Schema::dropIfExists('produits');
+    }
+};
+
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\PdgService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+class PdgApiController extends Controller
+{
+    protected $pdgService;
+
+    public function __construct(PdgService $pdgService)
+    {
+        $this->pdgService = $pdgService;
+    }
+
+    /**
+     * Obtenir les données du dashboard PDG
+     * GET /api/pdg/dashboard
+     */
+    public function dashboard(Request $request)
+    {
+        try {
+            $limit = $request->input('limit', 10);
+            
+            $data = $this->pdgService->getDashboardData($limit);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur dashboard PDG', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des données du dashboard',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Filtrer les réceptions
+     * GET /api/pdg/receptions
+     */
+    public function getReceptions(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'pointeur_id' => 'nullable|exists:users,id',
+                'producteur_id' => 'nullable|exists:users,id',
+                'vendeur_id' => 'nullable|exists:users,id',
+                'produit_id' => 'nullable|exists:produits,id',
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+                'verrou' => 'nullable|boolean',
+                'per_page' => 'nullable|integer|min:1|max:100',
+            ]);
+
+            $query = \App\Models\ReceptionPointeur::with([
+                'pointeur', 
+                'producteur', 
+                'produit', 
+                'vendeurAssigne'
+            ]);
+
+            // Appliquer les filtres
+            if (isset($validated['pointeur_id'])) {
+                $query->where('pointeur_id', $validated['pointeur_id']);
+            }
+
+            if (isset($validated['producteur_id'])) {
+                $query->where('producteur_id', $validated['producteur_id']);
+            }
+
+            if (isset($validated['vendeur_id'])) {
+                $query->where('vendeur_assigne_id', $validated['vendeur_id']);
+            }
+
+            if (isset($validated['produit_id'])) {
+                $query->where('produit_id', $validated['produit_id']);
+            }
+
+            if (isset($validated['date_debut'])) {
+                $query->whereDate('date_reception', '>=', $validated['date_debut']);
+            }
+
+            if (isset($validated['date_fin'])) {
+                $query->whereDate('date_reception', '<=', $validated['date_fin']);
+            }
+
+            if (isset($validated['verrou'])) {
+                $query->where('verrou', $validated['verrou']);
+            }
+
+            $perPage = $validated['per_page'] ?? 20;
+            $receptions = $query->orderBy('date_reception', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $receptions,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur filtrage réceptions', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du filtrage des réceptions',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Filtrer les inventaires
+     * GET /api/pdg/inventaires
+     */
+    public function getInventaires(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'vendeur_sortant_id' => 'nullable|exists:users,id',
+                'vendeur_entrant_id' => 'nullable|exists:users,id',
+                'categorie' => 'nullable|in:boulangerie,patisserie',
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+                'statut' => 'nullable|in:valide,en_attente',
+                'per_page' => 'nullable|integer|min:1|max:100',
+            ]);
+
+            $query = \App\Models\Inventaire::with([
+                'vendeurSortant', 
+                'vendeurEntrant', 
+                'details.produit'
+            ]);
+
+            // Appliquer les filtres
+            if (isset($validated['vendeur_sortant_id'])) {
+                $query->where('vendeur_sortant_id', $validated['vendeur_sortant_id']);
+            }
+
+            if (isset($validated['vendeur_entrant_id'])) {
+                $query->where('vendeur_entrant_id', $validated['vendeur_entrant_id']);
+            }
+
+            if (isset($validated['categorie'])) {
+                $query->where('categorie', $validated['categorie']);
+            }
+
+            if (isset($validated['date_debut'])) {
+                $query->whereDate('date_inventaire', '>=', $validated['date_debut']);
+            }
+
+            if (isset($validated['date_fin'])) {
+                $query->whereDate('date_inventaire', '<=', $validated['date_fin']);
+            }
+
+            if (isset($validated['statut'])) {
+                if ($validated['statut'] === 'valide') {
+                    $query->where('valide_sortant', true)
+                          ->where('valide_entrant', true);
+                } else {
+                    $query->where(function ($q) {
+                        $q->where('valide_sortant', false)
+                          ->orWhere('valide_entrant', false);
+                    });
+                }
+            }
+
+            $perPage = $validated['per_page'] ?? 20;
+            $inventaires = $query->orderBy('date_inventaire', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $inventaires,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur filtrage inventaires', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du filtrage des inventaires',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Filtrer les sessions de vente
+     * GET /api/pdg/sessions-vente
+     */
+    public function getSessionsVente(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'vendeur_id' => 'nullable|exists:users,id',
+                'categorie' => 'nullable|in:boulangerie,patisserie',
+                'statut' => 'nullable|in:ouverte,fermee',
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+                'per_page' => 'nullable|integer|min:1|max:100',
+            ]);
+
+            $query = \App\Models\SessionVente::with(['vendeur', 'fermeePar']);
+
+            // Appliquer les filtres
+            if (isset($validated['vendeur_id'])) {
+                $query->where('vendeur_id', $validated['vendeur_id']);
+            }
+
+            if (isset($validated['categorie'])) {
+                $query->where('categorie', $validated['categorie']);
+            }
+
+            if (isset($validated['statut'])) {
+                $query->where('statut', $validated['statut']);
+            }
+
+            if (isset($validated['date_debut'])) {
+                $query->whereDate('date_ouverture', '>=', $validated['date_debut']);
+            }
+
+            if (isset($validated['date_fin'])) {
+                $query->whereDate('date_ouverture', '<=', $validated['date_fin']);
+            }
+
+            $perPage = $validated['per_page'] ?? 20;
+            $sessions = $query->orderBy('date_ouverture', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $sessions,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur filtrage sessions de vente', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du filtrage des sessions de vente',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir le flux opérationnel détaillé pour une date
+     * GET /api/pdg/flux-operationnel
+     * Paramètres: date (required), vendeur_id (optional), produit_id (optional)
+     */
+    public function getFluxOperationnel(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'date' => 'required|date',
+                'vendeur_id' => 'nullable|exists:users,id',
+                'produit_id' => 'nullable|exists:produits,id',
+            ]);
+
+            $flux = $this->pdgService->getFluxOperationnel(
+                $validated['date'],
+                $validated['vendeur_id'] ?? null,
+                $validated['produit_id'] ?? null
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $flux,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur flux opérationnel', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération du flux opérationnel',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir le flux détaillé pour impression
+     * GET /api/pdg/flux-operationnel/imprimer
+     */
+    public function imprimerFluxOperationnel(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'date' => 'required|date',
+                'vendeur_id' => 'nullable|exists:users,id',
+                'produit_id' => 'nullable|exists:produits,id',
+            ]);
+
+            $flux = $this->pdgService->getFluxOperationnel(
+                $validated['date'],
+                $validated['vendeur_id'] ?? null,
+                $validated['produit_id'] ?? null
+            );
+
+            // Formater pour l'impression
+            $fluxImpression = [
+                'titre' => 'Flux Opérationnel Détaillé',
+                'date' => $validated['date'],
+                'date_impression' => now()->format('d/m/Y H:i'),
+                'filtres' => [
+                    'vendeur' => $validated['vendeur_id'] ?? 'Tous',
+                    'produit' => $validated['produit_id'] ?? 'Tous',
+                ],
+                'data' => $flux,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $fluxImpression,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur impression flux', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la préparation du flux pour impression',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir les sessions de vente détaillées avec les ventes
+     * GET /api/pdg/sessions-vente-detaillees
+     */
+    public function getSessionsVenteDetaillees(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'vendeur_id' => 'nullable|exists:users,id',
+                'categorie' => 'nullable|in:boulangerie,patisserie',
+                'statut' => 'nullable|in:ouverte,fermee',
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+            ]);
+
+            $sessions = $this->pdgService->getSessionsVenteDetaillees($validated);
+
+            return response()->json([
+                'success' => true,
+                'data' => $sessions,
+                'total' => $sessions->count(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur sessions détaillées', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des sessions détaillées',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir une session spécifique avec détails pour impression
+     * GET /api/pdg/sessions-vente/{id}/imprimer
+     */
+    public function imprimerSessionVente($id)
+    {
+        try {
+            $session = \App\Models\SessionVente::with(['vendeur', 'fermeePar'])
+                ->findOrFail($id);
+
+            $sessionDetaillée = $this->pdgService->getSessionAvecVentes($session);
+
+            // Formater pour l'impression
+            $sessionImpression = [
+                'titre' => 'Détails de la Session de Vente',
+                'date_impression' => now()->format('d/m/Y H:i'),
+                'session' => $sessionDetaillée,
+                'resume_financier' => $this->calculerResumeFinancier($sessionDetaillée),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $sessionImpression,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur impression session', [
+                'session_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la préparation de la session pour impression',
+                'error' => $e->getMessage(),
+            ], 404);
+        }
+    }
+
+    /**
+     * Obtenir toutes les sessions détaillées pour impression
+     * GET /api/pdg/sessions-vente-detaillees/imprimer
+     */
+    public function imprimerSessionsVenteDetaillees(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'vendeur_id' => 'nullable|exists:users,id',
+                'categorie' => 'nullable|in:boulangerie,patisserie',
+                'statut' => 'nullable|in:ouverte,fermee',
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+            ]);
+
+            $sessions = $this->pdgService->getSessionsVenteDetaillees($validated);
+
+            // Calculer les totaux globaux
+            $totauxGlobaux = [
+                'nombre_sessions' => $sessions->count(),
+                'total_ventes' => $sessions->sum('ventes_totales'),
+                'total_manquant' => $sessions->where('statut', 'fermee')->sum('manquant'),
+                'total_verse' => $sessions->where('statut', 'fermee')->sum('montant_verse'),
+            ];
+
+            // Formater pour l'impression
+            $rapport = [
+                'titre' => 'Rapport Détaillé des Sessions de Vente',
+                'date_impression' => now()->format('d/m/Y H:i'),
+                'filtres' => [
+                    'vendeur' => $validated['vendeur_id'] ?? 'Tous',
+                    'categorie' => $validated['categorie'] ?? 'Toutes',
+                    'statut' => $validated['statut'] ?? 'Tous',
+                    'periode' => [
+                        'debut' => $validated['date_debut'] ?? 'Début',
+                        'fin' => $validated['date_fin'] ?? 'Aujourd\'hui',
+                    ],
+                ],
+                'totaux' => $totauxGlobaux,
+                'sessions' => $sessions,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $rapport,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur impression sessions détaillées', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la préparation du rapport',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir les statistiques globales pour le PDG
+     * GET /api/pdg/statistiques
+     */
+    public function getStatistiques(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+            ]);
+
+            $dateDebut = $validated['date_debut'] ?? now()->startOfMonth()->toDateString();
+            $dateFin = $validated['date_fin'] ?? now()->toDateString();
+
+            $stats = [
+                'sessions_ouvertes' => \App\Models\SessionVente::where('statut', 'ouverte')->count(),
+                'sessions_fermees_periode' => \App\Models\SessionVente::where('statut', 'fermee')
+                    ->whereBetween('date_fermeture', [$dateDebut, $dateFin])
+                    ->count(),
+                'ventes_periode' => $this->calculerVentesPeriode($dateDebut, $dateFin),
+                'receptions_periode' => \App\Models\ReceptionPointeur::whereBetween('date_reception', [$dateDebut, $dateFin])
+                    ->sum('quantite'),
+                'retours_periode' => \App\Models\RetourProduit::whereBetween('date_retour', [$dateDebut, $dateFin])
+                    ->sum('quantite'),
+                'inventaires_en_attente' => \App\Models\Inventaire::where(function ($query) {
+                    $query->where('valide_sortant', false)
+                          ->orWhere('valide_entrant', false);
+                })->count(),
+                'vendeurs_actifs' => \App\Models\User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+                    ->whereHas('sessionsVenteActuelles', function ($query) {
+                        $query->where('statut', 'ouverte');
+                    })
+                    ->count(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats,
+                'periode' => [
+                    'debut' => $dateDebut,
+                    'fin' => $dateFin,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur statistiques PDG', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du calcul des statistiques',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtenir la liste des vendeurs avec leurs performances
+     * GET /api/pdg/vendeurs-performance
+     */
+    public function getVendeursPerformance(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'date_debut' => 'nullable|date',
+                'date_fin' => 'nullable|date',
+            ]);
+
+            $dateDebut = $validated['date_debut'] ?? now()->startOfMonth()->toDateString();
+            $dateFin = $validated['date_fin'] ?? now()->toDateString();
+
+            $vendeurs = \App\Models\User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+                ->with(['sessionsVente' => function ($query) use ($dateDebut, $dateFin) {
+                    $query->where('statut', 'fermee')
+                          ->whereBetween('date_fermeture', [$dateDebut, $dateFin]);
+                }])
+                ->get()
+                ->map(function ($vendeur) {
+                    $sessions = $vendeur->sessionsVente;
+                    $ventesTotales = 0;
+                    $manquantTotal = 0;
+
+                    foreach ($sessions as $session) {
+                        $ventesTotales += $this->pdgService->getSessionAvecVentes($session)['ventes_totales'] ?? 0;
+                        $manquantTotal += $session->manquant ?? 0;
+                    }
+
+                    return [
+                        'id' => $vendeur->id,
+                        'nom' => $vendeur->name,
+                        'role' => $vendeur->role,
+                        'nombre_sessions' => $sessions->count(),
+                        'ventes_totales' => round($ventesTotales, 2),
+                        'manquant_total' => round($manquantTotal, 2),
+                        'taux_manquant' => $ventesTotales > 0 ? round(($manquantTotal / $ventesTotales) * 100, 2) : 0,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $vendeurs,
+                'periode' => [
+                    'debut' => $dateDebut,
+                    'fin' => $dateFin,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur performance vendeurs', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du calcul des performances',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Méthodes helper privées
+     */
+    private function calculerResumeFinancier($session)
+    {
+        if ($session['statut'] !== 'fermee') {
+            return null;
+        }
+
+        $ventesTotales = $session['ventes_totales'] ?? 0;
+        $fondVente = $session['fond_vente'] ?? 0;
+        $montantVerse = $session['montant_verse'] ?? 0;
+        $diffOM = ($session['orange_money_final'] ?? 0) - ($session['orange_money_initial'] ?? 0);
+        $diffMTN = ($session['mtn_money_final'] ?? 0) - ($session['mtn_money_initial'] ?? 0);
+        $manquant = $session['manquant'] ?? 0;
+
+        return [
+            'ventes_totales' => round($ventesTotales, 2),
+            'fond_vente' => round($fondVente, 2),
+            'attendu' => round($ventesTotales + $fondVente, 2),
+            'montant_verse' => round($montantVerse, 2),
+            'difference_om' => round($diffOM, 2),
+            'difference_mtn' => round($diffMTN, 2),
+            'total_compte' => round($montantVerse + $diffOM + $diffMTN, 2),
+            'manquant' => round($manquant, 2),
+        ];
+    }
+
+    private function calculerVentesPeriode($dateDebut, $dateFin)
+    {
+        $sessions = \App\Models\SessionVente::where('statut', 'fermee')
+            ->whereBetween('date_fermeture', [$dateDebut, $dateFin])
+            ->get();
+
+        $total = 0;
+        foreach ($sessions as $session) {
+            $sessionDetaillée = $this->pdgService->getSessionAvecVentes($session);
+            $total += $sessionDetaillée['ventes_totales'] ?? 0;
+        }
+
+        return round($total, 2);
+    }
+}
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\UserService;
+use Illuminate\Http\Request;
+
+class UserApiController extends Controller
+{
+    protected $userService;
+
+    public function __construct(UserService $userService)
+    {
+        $this->userService = $userService;
+    }
+
+    public function index()
+    {
+        try {
+            $users = $this->userService->getAllUsers();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $users,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function parRole($role)
+    {
+        try {
+            $users = $this->userService->getUsersByRole($role);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $users,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'nom' => 'required|string|max:255',
+            'numero_telephone' => 'required|string|unique:users,numero_telephone',
+            'role' => 'required|in:pdg,pointeur,vendeur_boulangerie,vendeur_patisserie,producteur',
+            'code_pin' => 'required|string|size:6',
+        ]);
+
+        try {
+            $user = $this->userService->createUser($request->all());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Utilisateur créé avec succès',
+                'data' => $user,
+            ], 201);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            $user = $this->userService->updateUser($id, $request->all());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Utilisateur modifié avec succès',
+                'data' => $user,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function toggleActif($id)
+    {
+        try {
+            $user = $this->userService->toggleActif($id);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Statut modifié avec succès',
+                'data' => $user,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function destroy($id)
+    {
+        try {
+            $this->userService->deleteUser($id);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Utilisateur supprimé avec succès',
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function producteurs()
+    {
+        try {
+            $users = $this->userService->getProducteurs();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $users,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+}
+
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\SessionVenteService;
+use App\Http\Requests\OuvrirSessionRequest;
+use App\Http\Requests\FermerSessionRequest;
+use Illuminate\Http\Request;
+
+class SessionVenteApiController extends Controller
+{
+    protected $sessionVenteService;
+
+    public function __construct(SessionVenteService $sessionVenteService)
+    {
+        $this->sessionVenteService = $sessionVenteService;
+    }
+
+    /**
+     * Ouvrir une session de vente
+     * POST /api/sessions-vente/ouvrir
+     */
+    public function ouvrir(OuvrirSessionRequest $request)
+    {
+        try {
+            $session = $this->sessionVenteService->ouvrirSession(
+                $request->validated(),
+                $request->user()->id
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Session ouverte avec succès',
+                'data' => $session,
+            ], 201);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Fermer une session de vente
+     * POST /api/sessions-vente/{id}/fermer
+     */
+    public function fermer(FermerSessionRequest $request, $id)
+    {
+        try {
+            // Vérifier les permissions: seul le PDG peut fermer une session
+            if ($request->user()->role !== 'pdg') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Seul le PDG peut fermer une session',
+                ], 403);
+            }
+
+            $result = $this->sessionVenteService->fermerSession(
+                $id,
+                $request->validated(),
+                $request->user()->id
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Session fermée avec succès',
+                'data' => [
+                    'session' => $result['session'],
+                    'ventes_totales' => $result['ventes_totales'],
+                    'details_calcul' => $result['details_calcul'],
+                ],
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Obtenir la session active du vendeur connecté
+     * GET /api/sessions-vente/active
+     */
+    public function getActive(Request $request)
+    {
+        try {
+            $session = $this->sessionVenteService->getSessionActive($request->user()->id);
+
+            if (!$session) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Aucune session active',
+                    'data' => null,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $session,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Obtenir l'historique des sessions
+     * GET /api/sessions-vente/historique
+     */
+    public function historique(Request $request)
+    {
+        try {
+            $filters = $request->only(['statut', 'date_debut', 'date_fin']);
+            
+            // Si vendeur, voir seulement ses sessions
+            $vendeurId = $request->user()->role === 'vendeur' 
+                ? $request->user()->id 
+                : null;
+
+            $sessions = $this->sessionVenteService->getHistorique($vendeurId, $filters);
+
+            return response()->json([
+                'success' => true,
+                'data' => $sessions,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Obtenir les détails d'une session spécifique
+     * GET /api/sessions-vente/{id}
+     */
+    public function show(Request $request, $id)
+    {
+        try {
+            $session = \App\Models\SessionVente::with(['vendeur', 'fermeePar'])->findOrFail($id);
+
+            // Si vendeur, vérifier qu'il peut voir cette session
+            if ($request->user()->role === 'vendeur' && $session->vendeur_id !== $request->user()->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé',
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $session,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 404);
+        }
+    }
+
+    /**
+     * Obtenir un aperçu des ventes en cours (avant fermeture)
+     * GET /api/sessions-vente/{id}/apercu-ventes
+     */
+    public function apercuVentes(Request $request, $id)
+    {
+        try {
+            $session = \App\Models\SessionVente::findOrFail($id);
+
+            // Vérifier les permissions
+            if ($request->user()->role === 'vendeur' && $session->vendeur_id !== $request->user()->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé',
+                ], 403);
+            }
+
+            /*if ($session->statut === 'fermee') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cette session est déjà fermée',
+                ], 400);
+            }*/
+
+            // Calculer temporairement les ventes pour aperçu
+            $ventesTotales = $this->sessionVenteService->calculerVentesTotales($session);
+            $details = $this->sessionVenteService->getDetailsCalcul($session);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'ventes_totales_estimees' => $ventesTotales,
+                    'details_par_produit' => $details,
+                    'fond_vente' => $session->fond_vente,
+                    'date_ouverture' => $session->date_ouverture,
+                ],
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+}
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\CreateProduitRequest;
+use App\Services\ProduitService;
+use Illuminate\Http\Request;
+
+class ProduitApiController extends Controller
+{
+    protected $produitService;
+
+    public function __construct(ProduitService $produitService)
+    {
+        $this->produitService = $produitService;
+    }
+
+    public function index(Request $request)
+    {
+        try {
+            $actifOnly = $request->query('actif_only', true);
+            $produits = $this->produitService->getAllProduits($actifOnly);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $produits,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function parCategorie($categorie, Request $request)
+    {
+        try {
+            $actifOnly = $request->query('actif_only', true);
+            $produits = $this->produitService->getProduitsParCategorie($categorie, $actifOnly);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $produits,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function store(CreateProduitRequest $request)
+    {
+        try {
+            $produit = $this->produitService->createProduit($request->validated());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit créé avec succès',
+                'data' => $produit,
+            ], 201);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function update(CreateProduitRequest $request, $id)
+    {
+        try {
+            $produit = $this->produitService->updateProduit($id, $request->validated());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit modifié avec succès',
+                'data' => $produit,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function toggleActif($id)
+    {
+        try {
+            $produit = $this->produitService->toggleActif($id);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Statut modifié avec succès',
+                'data' => $produit,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function destroy($id)
+    {
+        try {
+            $this->produitService->deleteProduit($id);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit supprimé avec succès',
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+}
+
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\InscriptionRequest;
+use App\Services\AuthService;
+use Illuminate\Http\Request;
+
+class AuthApiController extends Controller
+{
+    protected $authService;
+
+    public function __construct(AuthService $authService)
+    {
+        $this->authService = $authService;
+    }
+
+    public function inscription(InscriptionRequest $request)
+    {
+        try {
+            $user = $this->authService->inscription($request->validated());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Inscription réussie',
+                'data' => $user,
+            ], 201);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function connexion(Request $request)
+    {
+        $request->validate([
+            'numero_telephone' => 'required|string',
+            'code_pin' => 'required|string',
+        ]);
+
+        try {
+            $result = $this->authService->connexion(
+                $request->numero_telephone,
+                $request->code_pin
+            );
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Connexion réussie',
+                'data' => $result,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 401);
+        }
+    }
+
+    public function deconnexion(Request $request)
+    {
+        try {
+            $this->authService->deconnexion($request->user());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Déconnexion réussie',
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $request->user(),
+        ]);
+    }
+}
+
+
+
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use App\Models\VendeurActif;
+
+class AuthService
+{
+    public function inscription(array $data)
+    {
+        DB::beginTransaction();
+        
+        try {
+            // Vérifier le code PDG si nécessaire
+            if ($data['role'] === 'pdg') {
+                $configPdg = DB::table('config_pdg')->first();
+                
+                if (!$configPdg || $data['code_pdg'] !== $configPdg->code_inscription_pdg) {
+                    throw new \Exception("Code PDG incorrect");
+                }
+            }
+            
+            $user = User::create([
+                'name' => $data['nom'],
+                'numero_telephone' => $data['numero_telephone'],
+                'role' => $data['role'],
+                'code_pin' => $data['code_pin'],
+                'preferred_language' => $data['preferred_language'] ?? 'fr',
+                'actif' => true,
+            ]);
+            
+            DB::commit();
+            return $user;
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    public function connexion($numeroTelephone, $codePin)
+    {
+        $user = User::where('numero_telephone', $numeroTelephone)
+            ->where('actif', true)
+            ->first();
+        
+        if (!$user || $user->code_pin !== $codePin) {
+            throw new \Exception("Identifiants incorrects");
+        }
+        
+        if($user->role === 'vendeur_boulangerie' || $user->role === 'vendeur_patisserie') {
+             // Gérer les vendeurs actifs
+            $categorie = $user->role === 'vendeur_boulangerie' ? 'boulangerie' :
+                     ($user->role === 'vendeur_patisserie' ? 'patisserie' : null);
+            VendeurActif::setVendeurActif(
+                    $categorie,
+                    $user->id
+                );
+
+        }
+       
+        $token = $user->createToken('auth_token')->plainTextToken;
+        
+        return [
+            'user' => $user,
+            'token' => $token,
+        ];
+    }
+
+    public function deconnexion($user)
+    {
+        $user->tokens()->delete();
+        return true;
+    }
+}
+
+
+<?php
+
+namespace App\Services;
+
+use App\Models\SessionVente;
+use App\Models\Inventaire;
+use App\Models\ReceptionPointeur;
+use App\Models\RetourProduit;
+use App\Models\Produit;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+
+class PdgService
+{
+    /**
+     * Obtenir les données du dashboard
+     */
+    public function getDashboardData($limit = 10)
+    {
+        return [
+            'receptions' => $this->getRecentReceptions($limit),
+            'inventaires' => $this->getRecentInventaires($limit),
+            'sessions_vente' => $this->getRecentSessionsVente($limit),
+            'statistiques' => $this->getStatistiquesGlobales(),
+        ];
+    }
+
+    /**
+     * Récupérer les réceptions récentes
+     */
+    private function getRecentReceptions($limit)
+    {
+        return ReceptionPointeur::with(['pointeur', 'producteur', 'produit', 'vendeurAssigne'])
+            ->orderBy('date_reception', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($reception) {
+                return [
+                    'id' => $reception->id,
+                    'pointeur' => $reception->pointeur->name,
+                    'producteur' => $reception->producteur->name,
+                    'produit' => $reception->produit->nom,
+                    'categorie' => $reception->produit->categorie,
+                    'quantite' => $reception->quantite,
+                    'vendeur_assigne' => $reception->vendeurAssigne ? $reception->vendeurAssigne->name : 'Non assigné',
+                    'verrou' => $reception->verrou,
+                    'date_reception' => $reception->date_reception,
+                    'notes' => $reception->notes,
+                ];
+            });
+    }
+
+    /**
+     * Récupérer les inventaires récents
+     */
+    private function getRecentInventaires($limit)
+    {
+        return Inventaire::with(['vendeurSortant', 'vendeurEntrant', 'details.produit'])
+            ->orderBy('date_inventaire', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($inventaire) {
+                return [
+                    'id' => $inventaire->id,
+                    'vendeur_sortant' => $inventaire->vendeurSortant->name,
+                    'vendeur_entrant' => $inventaire->vendeurEntrant->name,
+                    'categorie' => $inventaire->categorie,
+                    'valide_sortant' => $inventaire->valide_sortant,
+                    'valide_entrant' => $inventaire->valide_entrant,
+                    'statut' => $this->getStatutInventaire($inventaire),
+                    'date_inventaire' => $inventaire->date_inventaire,
+                    'nombre_produits' => $inventaire->details->count(),
+                ];
+            });
+    }
+
+    /**
+     * Récupérer les sessions de vente récentes
+     */
+    private function getRecentSessionsVente($limit)
+    {
+        return SessionVente::with(['vendeur', 'fermeePar'])
+            ->orderBy('date_ouverture', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($session) {
+                return $this->formatSessionVente($session);
+            });
+    }
+
+    /**
+     * Obtenir les statistiques globales
+     */
+    private function getStatistiquesGlobales()
+    {
+        $today = Carbon::today();
+        
+        return [
+            'sessions_ouvertes' => SessionVente::where('statut', 'ouverte')->count(),
+            'receptions_aujourdhui' => ReceptionPointeur::whereDate('date_reception', $today)->count(),
+            'inventaires_en_attente' => Inventaire::where(function ($query) {
+                $query->where('valide_sortant', false)
+                      ->orWhere('valide_entrant', false);
+            })->count(),
+            'total_ventes_aujourdhui' => $this->getTotalVentesAujourdhui(),
+        ];
+    }
+
+    /**
+     * Calculer le total des ventes du jour
+     */
+    private function getTotalVentesAujourdhui()
+    {
+        $sessionsFermees = SessionVente::where('statut', 'fermee')
+            ->whereDate('date_fermeture', Carbon::today())
+            ->get();
+
+        $total = 0;
+        foreach ($sessionsFermees as $session) {
+            $ventes = $this->calculerVentesSession($session);
+            $total += $ventes;
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * Obtenir le flux opérationnel détaillé pour une date
+     */
+    public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
+    {
+        $dateCarbon = Carbon::parse($date);
+        
+        // Récupérer tous les vendeurs actifs ou un vendeur spécifique
+        $vendeurs = $vendeurId 
+            ? User::where('id', $vendeurId)->get()
+            : User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])->get();
+
+        $flux = [];
+
+        foreach ($vendeurs as $vendeur) {
+            $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $date, $produitId);
+            
+            if (!empty($fluxVendeur['flux'])) {
+                $flux[] = [
+                    'vendeur' => [
+                        'id' => $vendeur->id,
+                        'nom' => $vendeur->name,
+                        'role' => $vendeur->role,
+                    ],
+                    'periode' => $fluxVendeur['periode'],
+                    'produits' => $fluxVendeur['flux'],
+                    'total_ventes' => $fluxVendeur['total_ventes'],
+                ];
+            }
+        }
+
+        return [
+            'date' => $date,
+            'flux' => $flux,
+            'resume' => $this->getResumeFlux($flux),
+        ];
+    }
+
+    /**
+     * Obtenir le flux par vendeur
+     */
+    public function getFluxParVendeur($vendeurId, $date = null, $produitId = null)
+    {
+        $date = $date ?? now()->toDateString();
+        $dateCarbon = Carbon::parse($date);
+        
+        // Récupérer l'inventaire de début
+        $inventaireDebut = $this->trouverInventaireDebut($vendeurId, $dateCarbon);
+        
+        // Récupérer l'inventaire de fin
+        $inventaireFin = $this->trouverInventaireFin($vendeurId, $dateCarbon);
+        
+        // Déterminer la période réelle du flux
+        $dateDebut = $inventaireDebut ? Carbon::parse($inventaireDebut->date_inventaire) : $dateCarbon->copy()->startOfDay();
+        $dateFin = $inventaireFin ? Carbon::parse($inventaireFin->date_inventaire) : $dateCarbon->copy()->endOfDay();
+        
+        // Récupérer toutes les réceptions entre le début et la fin du flux
+        $receptions = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
+            ->whereBetween('date_reception', [$dateDebut, $dateFin])
+            ->with('produit')
+            ->get();
+        
+        // Récupérer tous les retours entre le début et la fin du flux
+        $retours = RetourProduit::where('vendeur_id', $vendeurId)
+            ->whereBetween('date_retour', [$dateDebut, $dateFin])
+            ->with('produit')
+            ->get();
+        
+        // Construire le flux pour chaque produit
+        $flux = [];
+        $produitsQuery = Produit::where('actif', true);
+        
+        if ($produitId) {
+            $produitsQuery->where('id', $produitId);
+        }
+        
+        $produits = $produitsQuery->get();
+        $totalVentes = 0;
+        
+        foreach ($produits as $produit) {
+            $quantiteTrouvee = 0;
+            $quantiteRecue = 0;
+            $quantiteRetour = 0;
+            $quantiteRestante = 0;
+            
+            // Quantité trouvée (inventaire début)
+            if ($inventaireDebut) {
+                $detail = $inventaireDebut->details->where('produit_id', $produit->id)->first();
+                $quantiteTrouvee = $detail ? $detail->quantite_restante : 0;
+            }
+            
+            // Quantité reçue
+            $quantiteRecue = $receptions->where('produit_id', $produit->id)->sum('quantite');
+            
+            // Quantité retour
+            $quantiteRetour = $retours->where('produit_id', $produit->id)->sum('quantite');
+            
+            // Quantité restante (inventaire fin)
+            if ($inventaireFin) {
+                $detail = $inventaireFin->details->where('produit_id', $produit->id)->first();
+                $quantiteRestante = $detail ? $detail->quantite_restante : 0;
+            }
+            
+            // Quantité vendue = Trouvée + Reçue - Retour - Restante
+            $quantiteVendue = max(0, $quantiteTrouvee + $quantiteRecue - $quantiteRetour - $quantiteRestante);
+            $valeurVente = $quantiteVendue * $produit->prix;
+            $totalVentes += $valeurVente;
+            
+            $flux[] = [
+                'produit_id' => $produit->id,
+                'produit_nom' => $produit->nom,
+                'produit_categorie' => $produit->categorie,
+                'prix_unitaire' => $produit->prix,
+                'quantite_trouvee' => $quantiteTrouvee,
+                'quantite_recue' => $quantiteRecue,
+                'quantite_retour' => $quantiteRetour,
+                'quantite_restante' => $quantiteRestante,
+                'quantite_vendue' => $quantiteVendue,
+                'valeur_vente' => round($valeurVente, 2),
+            ];
+        }
+        
+        return [
+            'periode' => [
+                'debut' => $inventaireDebut ? $inventaireDebut->date_inventaire : null,
+                'fin' => $inventaireFin ? $inventaireFin->date_inventaire : null,
+            ],
+            'flux' => $flux,
+            'total_ventes' => round($totalVentes, 2),
+        ];
+    }
+
+    /**
+     * Trouver l'inventaire de début (vendeur entrant)
+     */
+    private function trouverInventaireDebut($vendeurId, Carbon $date)
+    {
+        return Inventaire::where('vendeur_entrant_id', $vendeurId)
+            ->where('valide_entrant', true)
+            ->where('date_inventaire', '<=', $date->copy()->endOfDay())
+            ->orderBy('date_inventaire', 'desc')
+            ->with('details')
+            ->first();
+    }
+
+    /**
+     * Trouver l'inventaire de fin (vendeur sortant)
+     */
+    private function trouverInventaireFin($vendeurId, Carbon $date)
+    {
+        return Inventaire::where('vendeur_sortant_id', $vendeurId)
+            ->where('valide_sortant', true)
+            ->whereBetween('date_inventaire', [
+                $date->copy()->startOfDay(),
+                $date->copy()->addDay()->endOfDay()
+            ])
+            ->orderBy('date_inventaire', 'desc')
+            ->with('details')
+            ->first();
+    }
+
+    /**
+     * Obtenir la liste détaillée des sessions de vente avec filtres
+     */
+    public function getSessionsVenteDetaillees($filters = [])
+    {
+        $query = SessionVente::with(['vendeur', 'fermeePar']);
+
+        // Filtres
+        if (isset($filters['vendeur_id'])) {
+            $query->where('vendeur_id', $filters['vendeur_id']);
+        }
+
+        if (isset($filters['categorie'])) {
+            $query->where('categorie', $filters['categorie']);
+        }
+
+        if (isset($filters['statut'])) {
+            $query->where('statut', $filters['statut']);
+        }
+
+        if (isset($filters['date_debut'])) {
+            $query->whereDate('date_ouverture', '>=', $filters['date_debut']);
+        }
+
+        if (isset($filters['date_fin'])) {
+            $query->whereDate('date_ouverture', '<=', $filters['date_fin']);
+        }
+
+        $sessions = $query->orderBy('date_ouverture', 'desc')->get();
+
+        return $sessions->map(function ($session) {
+            return $this->getSessionAvecVentes($session);
+        });
+    }
+
+    /**
+     * Obtenir une session avec le détail des ventes
+     */
+    public function getSessionAvecVentes(SessionVente $session)
+    {
+        $sessionData = $this->formatSessionVente($session);
+        
+        if ($session->statut === 'fermee') {
+            $sessionData['details_ventes'] = $this->getDetailsVentesSession($session);
+            $sessionData['ventes_totales'] = $this->calculerVentesSession($session);
+        } else {
+            $sessionData['details_ventes'] = [];
+            $sessionData['ventes_totales'] = 0;
+        }
+
+        return $sessionData;
+    }
+
+    /**
+     * Obtenir les détails des ventes d'une session
+     */
+    private function getDetailsVentesSession(SessionVente $session)
+    {
+        $vendeurId = $session->vendeur_id;
+        $categorie = $session->categorie;
+        $dateDebut = Carbon::parse($session->date_ouverture);
+        $dateFin = $session->date_fermeture ? Carbon::parse($session->date_fermeture) : now();
+
+        $produits = Produit::where('categorie', $categorie)->where('actif', true)->get();
+        $details = [];
+
+        foreach ($produits as $produit) {
+            $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut);
+            $entrees = $this->getEntrees($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $retours = $this->getRetours($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $stockFinal = $this->getStockFinal($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $quantiteVendue = max(0, $stockInitial + $entrees - $retours - $stockFinal);
+            $montantVendu = $quantiteVendue * $produit->prix;
+
+            if ($quantiteVendue > 0 || $stockInitial > 0 || $entrees > 0) {
+                $details[] = [
+                    'produit_id' => $produit->id,
+                    'produit_nom' => $produit->nom,
+                    'prix_unitaire' => $produit->prix,
+                    'stock_initial' => $stockInitial,
+                    'entrees' => $entrees,
+                    'retours' => $retours,
+                    'stock_final' => $stockFinal,
+                    'quantite_vendue' => $quantiteVendue,
+                    'montant_vendu' => round($montantVendu, 2),
+                ];
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * Calculer les ventes totales d'une session
+     */
+    private function calculerVentesSession(SessionVente $session)
+    {
+        $details = $this->getDetailsVentesSession($session);
+        return array_sum(array_column($details, 'montant_vendu'));
+    }
+
+    /**
+     * Formater une session de vente
+     */
+    private function formatSessionVente(SessionVente $session)
+    {
+        return [
+            'id' => $session->id,
+            'vendeur' => [
+                'id' => $session->vendeur->id,
+                'nom' => $session->vendeur->name,
+            ],
+            'categorie' => $session->categorie,
+            'fond_vente' => $session->fond_vente,
+            'orange_money_initial' => $session->orange_money_initial,
+            'mtn_money_initial' => $session->mtn_money_initial,
+            'orange_money_final' => $session->orange_money_final,
+            'mtn_money_final' => $session->mtn_money_final,
+            'montant_verse' => $session->montant_verse,
+            'manquant' => $session->manquant,
+            'statut' => $session->statut,
+            'date_ouverture' => $session->date_ouverture,
+            'date_fermeture' => $session->date_fermeture,
+            'fermee_par' => $session->fermeePar ? $session->fermeePar->name : null,
+        ];
+    }
+
+    /**
+     * Méthodes helpers pour les calculs de stock
+     */
+    private function getStockInitial($vendeurId, $produitId, $dateDebut)
+    {
+        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+            ->where('valide_entrant', true)
+            ->where('date_inventaire', '<=', $dateDebut)
+            ->orderBy('date_inventaire', 'desc')
+            ->first();
+
+        if (!$inventaire) {
+            return 0;
+        }
+
+        $detail = DB::table('inventaire_details')
+            ->where('inventaire_id', $inventaire->id)
+            ->where('produit_id', $produitId)
+            ->first();
+
+        return $detail ? $detail->quantite_restante : 0;
+    }
+
+    private function getEntrees($vendeurId, $produitId, $dateDebut, $dateFin)
+    {
+        return ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
+            ->where('produit_id', $produitId)
+            ->whereBetween('date_reception', [$dateDebut, $dateFin])
+            ->sum('quantite');
+    }
+
+    private function getRetours($vendeurId, $produitId, $dateDebut, $dateFin)
+    {
+        return RetourProduit::where('vendeur_id', $vendeurId)
+            ->where('produit_id', $produitId)
+            ->whereBetween('date_retour', [$dateDebut, $dateFin])
+            ->sum('quantite');
+    }
+
+    private function getStockFinal($vendeurId, $produitId, $dateDebut, $dateFin)
+    {
+        $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+            ->where('valide_sortant', true)
+            ->whereBetween('date_inventaire', [$dateDebut, $dateFin])
+            ->orderBy('date_inventaire', 'desc')
+            ->first();
+
+        if (!$inventaire) {
+            return 0;
+        }
+
+        $detail = DB::table('inventaire_details')
+            ->where('inventaire_id', $inventaire->id)
+            ->where('produit_id', $produitId)
+            ->first();
+
+        return $detail ? $detail->quantite_restante : 0;
+    }
+
+    /**
+     * Obtenir le statut d'un inventaire
+     */
+    private function getStatutInventaire(Inventaire $inventaire)
+    {
+        if ($inventaire->valide_sortant && $inventaire->valide_entrant) {
+            return 'Validé';
+        } elseif ($inventaire->valide_sortant) {
+            return 'Validé par sortant';
+        } elseif ($inventaire->valide_entrant) {
+            return 'Validé par entrant';
+        }
+        return 'En attente';
+    }
+
+    /**
+     * Obtenir le résumé du flux
+     */
+    private function getResumeFlux($flux)
+    {
+        $totalVentes = 0;
+        $totalProduits = 0;
+        
+        foreach ($flux as $vendeurFlux) {
+            $totalVentes += $vendeurFlux['total_ventes'];
+            $totalProduits += count($vendeurFlux['produits']);
+        }
+
+        return [
+            'nombre_vendeurs' => count($flux),
+            'total_ventes' => round($totalVentes, 2),
+            'total_produits_traites' => $totalProduits,
+        ];
+    }
+}
+
+<?php
+
+namespace App\Services;
+
+use App\Models\Produit;
+use Illuminate\Support\Facades\DB;
+
+class ProduitService
+{
+    public function getAllProduits($actifOnly = false)
+    {
+        $query = Produit::query();
+        
+        if ($actifOnly) {
+            $query->actif();
+        }
+        
+        return $query->orderBy('nom')->get();
+    }
+
+    public function getProduitsParCategorie($categorie, $actifOnly = true)
+    {
+        $query = Produit::categorie($categorie);
+        
+        if ($actifOnly) {
+            $query->actif();
+        }
+        
+        return $query->orderBy('nom')->get();
+    }
+
+    public function createProduit(array $data)
+    {
+        return Produit::create($data);
+    }
+
+    public function updateProduit($id, array $data)
+    {
+        $produit = Produit::findOrFail($id);
+        $produit->update($data);
+        return $produit;
+    }
+
+    public function toggleActif($id)
+    {
+        $produit = Produit::findOrFail($id);
+        $produit->actif = !$produit->actif;
+        $produit->save();
+        return $produit;
+    }
+
+    public function deleteProduit($id)
+    {
+        $produit = Produit::findOrFail($id);
+        $produit->delete();
+        return true;
+    }
+
+    public function getProduitById($id)
+    {
+        return Produit::findOrFail($id);
+    }
+}
+
+
+<?php
+
+namespace App\Services;
+
+use App\Models\SessionVente;
+use App\Models\Inventaire;
+use App\Models\ReceptionPointeur;
+use App\Models\RetourProduit;
+use App\Models\Produit;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+
+class SessionVenteService
+{
+    /**
+     * Fermer une session de vente avec calcul automatique des ventes
+     */
+   public function fermerSession($sessionId, array $data, $pdgId)
+{
+    DB::beginTransaction();
+    try {
+        Log::info("Début fermeture session", [
+            'session_id' => $sessionId,
+            'pdg_id' => $pdgId,
+            'data' => $data
+        ]);
+
+        $session = SessionVente::findOrFail($sessionId);
+        
+        if ($session->statut === 'fermee') {
+            Log::warning("Tentative de fermeture d'une session déjà fermée", [
+                'session_id' => $sessionId
+            ]);
+            throw new \Exception("Cette session est déjà fermée");
+        }
+
+        // Calculer les ventes totales automatiquement
+        $ventesTotales = $this->calculerVentesTotales($session);
+        Log::info("Ventes totales calculées", [
+            'session_id' => $sessionId,
+            'ventes_totales' => $ventesTotales
+        ]);
+
+        // Calculer les différences Mobile Money
+        $diffOM = $data['orange_money_final'] - $session->orange_money_initial;
+        $diffMTN = $data['mtn_money_final'] - $session->mtn_money_initial;
+        
+        Log::info("Différences Mobile Money calculées", [
+            'session_id' => $sessionId,
+            'diff_om' => $diffOM,
+            'om_initial' => $session->orange_money_initial,
+            'om_final' => $data['orange_money_final'],
+            'diff_mtn' => $diffMTN,
+            'mtn_initial' => $session->mtn_money_initial,
+            'mtn_final' => $data['mtn_money_final']
+        ]);
+
+        $manquant = ($ventesTotales + $session->fond_vente) -
+            ($data['montant_verse'] + $diffOM + $diffMTN);
+        
+        Log::info("Calcul du manquant", [
+            'session_id' => $sessionId,
+            'ventes_totales' => $ventesTotales,
+            'fond_vente' => $session->fond_vente,
+            'montant_verse' => $data['montant_verse'],
+            'diff_om' => $diffOM,
+            'diff_mtn' => $diffMTN,
+            'manquant_calcule' => $manquant
+        ]);
+
+        $session->update([
+            'montant_verse' => $data['montant_verse'],
+            'orange_money_final' => $data['orange_money_final'],
+            'mtn_money_final' => $data['mtn_money_final'],
+            'manquant' => $manquant,
+            'statut' => 'fermee',
+            'fermee_par' => $pdgId,
+            'date_fermeture' => now(),
+        ]);
+
+        Log::info("Session fermée avec succès", [
+            'session_id' => $sessionId,
+            'manquant' => $manquant,
+            'statut' => 'fermee'
+        ]);
+
+        DB::commit();
+
+        return [
+            'session' => $session->load(['vendeur', 'fermeePar']),
+            'ventes_totales' => $ventesTotales,
+            'details_calcul' => $this->getDetailsCalcul($session)
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Erreur lors de la fermeture de session", [
+            'session_id' => $sessionId,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        throw $e;
+    }
+}
+
+    /**
+     * Calculer les ventes totales de la session
+     * Formule: Ventes = (Stock initial + Entrées - Retours - Stock final) × Prix
+     */
+    public function calculerVentesTotales(SessionVente $session)
+{
+    $vendeurId = $session->vendeur_id;
+    $categorie = $session->categorie;
+    $dateDebut = Carbon::parse($session->date_ouverture)->startOfDay();
+    $dateFin = now()->endOfDay();
+
+    \Log::info('=== DÉBUT CALCUL VENTES TOTALES ===', [
+        'session_id' => $session->id,
+        'vendeur_id' => $vendeurId,
+        'categorie' => $categorie,
+        'date_debut' => $dateDebut->toDateTimeString(),
+        'date_fin' => $dateFin->toDateTimeString(),
+    ]);
+
+    // Récupérer tous les produits de la catégorie
+    $produits = Produit::where('categorie', $categorie)->get();
+    
+    \Log::info('Produits trouvés', [
+        'nombre_produits' => $produits->count(),
+        'produits' => $produits->pluck('nom', 'id')->toArray()
+    ]);
+
+    $ventesTotales = 0;
+
+    foreach ($produits as $produit) {
+        \Log::info("--- Traitement produit: {$produit->nom} (ID: {$produit->id}) ---");
+
+        // 1. STOCK INITIAL (dernier inventaire validé avant/lors de l'ouverture)
+        $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut);
+        \Log::info('Stock initial', [
+            'produit' => $produit->nom,
+            'quantite' => $stockInitial
+        ]);
+
+        // 2. ENTRÉES (réceptions du pointeur pendant la session)
+        $entrees = $this->getEntrees($vendeurId, $produit->id, $dateDebut, $dateFin);
+        \Log::info('Entrées', [
+            'produit' => $produit->nom,
+            'quantite' => $entrees
+        ]);
+
+        // 3. RETOURS (produits retournés pendant la session)
+        $retours = $this->getRetours($vendeurId, $produit->id, $dateDebut, $dateFin);
+        \Log::info('Retours', [
+            'produit' => $produit->nom,
+            'quantite' => $retours
+        ]);
+
+        // 4. STOCK FINAL (inventaire de sortie si existe, sinon 0)
+        $stockFinal = $this->getStockFinal($vendeurId, $produit->id,$dateDebut, $dateFin);
+        \Log::info('Stock final', [
+            'produit' => $produit->nom,
+            'quantite' => $stockFinal
+        ]);
+
+        // Calcul des quantités vendues
+        $quantiteVendue = $stockInitial + $entrees - $retours - $stockFinal;
+        
+        \Log::info('Calcul quantité vendue', [
+            'produit' => $produit->nom,
+            'formule' => "$stockInitial + $entrees - $retours - $stockFinal",
+            'quantite_brute' => $quantiteVendue
+        ]);
+
+        // Sécurité: pas de ventes négatives
+        if ($quantiteVendue < 0) {
+            \Log::warning('Quantité vendue négative détectée', [
+                'produit' => $produit->nom,
+                'quantite_negative' => $quantiteVendue,
+                'action' => 'Remise à 0'
+            ]);
+            $quantiteVendue = 0;
+        }
+
+        // Calcul du montant pour ce produit
+        $montantProduit = $quantiteVendue * $produit->prix;
+        $ventesTotales += $montantProduit;
+
+        \Log::info('Montant calculé pour le produit', [
+            'produit' => $produit->nom,
+            'quantite_vendue' => $quantiteVendue,
+            'prix_unitaire' => $produit->prix,
+            'montant_produit' => $montantProduit,
+            'ventes_totales_cumulees' => $ventesTotales
+        ]);
+    }
+
+    $ventesTotalesFinales = round($ventesTotales, 2);
+
+    \Log::info('=== FIN CALCUL VENTES TOTALES ===', [
+        'session_id' => $session->id,
+        'ventes_totales_brutes' => $ventesTotales,
+        'ventes_totales_arrondies' => $ventesTotalesFinales
+    ]);
+
+    return $ventesTotalesFinales;
+}
+
+    /**
+     * Récupérer le stock initial du dernier inventaire validé
+     */
+    public function getStockInitial($vendeurId, $produitId, $dateDebut)
+    {
+        // Chercher le dernier inventaire où le vendeur est ENTRANT et validé
+        // avant ou à la date d'ouverture de session
+        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+            ->where('valide_entrant', true)
+            ->where('date_inventaire', '<=', $dateDebut)
+            ->orderBy('date_inventaire', 'desc')
+            ->first();
+
+        if (!$inventaire) {
+            return 0;
+        }
+
+        $detail = DB::table('inventaire_details')
+            ->where('inventaire_id', $inventaire->id)
+            ->where('produit_id', $produitId)
+            ->first();
+
+        return $detail ? $detail->quantite_restante : 0;
+    }
+
+    /**
+     * Récupérer les entrées (réceptions) pendant la session
+     */
+    public function getEntrees($vendeurId, $produitId, $dateDebut, $dateFin)
+{
+    \Log::info('getEntrees appelé', [
+        'vendeur_id' => $vendeurId,
+        'produit_id' => $produitId,
+        'date_debut' => $dateDebut,
+        'date_fin' => $dateFin
+    ]);
+
+    $query = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
+        ->where('produit_id', $produitId)
+        ->whereBetween('date_reception', [$dateDebut, $dateFin]);
+
+
+    $resultat = $query->sum('quantite');
+
+    \Log::info('Résultat getEntrees', [
+        'total_entrees' => $resultat,
+        'nombre_enregistrements' => $query->count()
+    ]);
+
+    return $resultat;
+}
+
+    /**
+     * Récupérer les retours pendant la session
+     */
+    public function getRetours($vendeurId, $produitId, $dateDebut, $dateFin)
+    {
+        return RetourProduit::where('vendeur_id', $vendeurId)
+            ->where('produit_id', $produitId)
+            ->whereBetween('date_retour', [$dateDebut, $dateFin])
+            ->sum('quantite');
+    }
+
+    /**
+     * Récupérer le stock final (inventaire de sortie)
+     */
+    public function getStockFinal($vendeurId, $produitId, $dateDebut, $dateFin)
+    {
+        // Chercher un inventaire où le vendeur est SORTANT
+        // autour de la date de fin (±30 minutes de tolérance)
+        $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+            ->where('valide_sortant', true)
+            ->whereBetween('date_inventaire', [$dateDebut, $dateFin])
+            ->orderBy('date_inventaire', 'desc')
+            ->first();
+
+        if (!$inventaire) {
+            // Si pas d'inventaire de sortie, considérer stock final = 0
+            return 0;
+        }
+
+        $detail = DB::table('inventaire_details')
+            ->where('inventaire_id', $inventaire->id)
+            ->where('produit_id', $produitId)
+            ->first();
+
+        return $detail ? $detail->quantite_restante : 0;
+    }
+
+    /**
+     * Obtenir les détails du calcul pour vérification
+     */
+    public function getDetailsCalcul(SessionVente $session)
+    {
+        $vendeurId = $session->vendeur_id;
+        $categorie = $session->categorie;
+        $dateDebut = Carbon::parse($session->date_ouverture);
+        $dateFin = now();
+
+        $produits = Produit::where('categorie', $categorie)->get();
+        $details = [];
+
+        foreach ($produits as $produit) {
+            $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut);
+            $entrees = $this->getEntrees($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $retours = $this->getRetours($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $stockFinal = $this->getStockFinal($vendeurId, $produit->id, $dateDebut, $dateFin);
+            $quantiteVendue = max(0, $stockInitial + $entrees - $retours - $stockFinal);
+            $montantVendu = $quantiteVendue * $produit->prix;
+
+            if ($quantiteVendue > 0) {
+                $details[] = [
+                    'produit' => $produit->nom,
+                    'prix_unitaire' => $produit->prix,
+                    'stock_initial' => $stockInitial,
+                    'entrees' => $entrees,
+                    'retours' => $retours,
+                    'stock_final' => $stockFinal,
+                    'quantite_vendue' => $quantiteVendue,
+                    'montant_vendu' => $montantVendu,
+                ];
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * Ouvrir une session de vente
+     */
+    public function ouvrirSession(array $data, $vendeurId)
+    {
+        DB::beginTransaction();
+        try {
+            // Vérifier qu'aucune session n'est déjà ouverte pour ce vendeur
+            $sessionOuverte = SessionVente::where('vendeur_id', $vendeurId)
+                ->where('statut', 'ouverte')
+                ->exists();
+
+            if ($sessionOuverte) {
+                throw new \Exception("Vous avez déjà une session ouverte");
+            }
+
+            $session = SessionVente::create([
+                'vendeur_id' => $vendeurId,
+                'categorie' => $data['categorie'],
+                'fond_vente' => $data['fond_vente'],
+                'orange_money_initial' => $data['orange_money_initial'] ?? 0,
+                'mtn_money_initial' => $data['mtn_money_initial'] ?? 0,
+                'statut' => 'ouverte',
+                'date_ouverture' => now(),
+            ]);
+
+            DB::commit();
+            return $session->load('vendeur');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Obtenir la session active d'un vendeur
+     */
+    public function getSessionActive($vendeurId)
+    {
+        return SessionVente::where('vendeur_id', $vendeurId)
+            ->where('statut', 'ouverte')
+            ->with('vendeur')
+            ->first();
+    }
+
+    /**
+     * Obtenir l'historique des sessions
+     */
+    public function getHistorique($vendeurId = null, $filters = [])
+    {
+        $query = SessionVente::with(['vendeur', 'fermeePar'])
+            ->orderBy('date_ouverture', 'desc');
+
+        if ($vendeurId) {
+            $query->where('vendeur_id', $vendeurId);
+        }
+
+        if (isset($filters['statut'])) {
+            $query->where('statut', $filters['statut']);
+        }
+
+        if (isset($filters['date_debut'])) {
+            $query->where('date_ouverture', '>=', $filters['date_debut']);
+        }
+
+        if (isset($filters['date_fin'])) {
+            $query->where('date_ouverture', '<=', $filters['date_fin']);
+        }
+
+        return $query->paginate(20);
+    }
+}
+
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+
+class UserService
+{
+    public function getAllUsers()
+    {
+        return User::orderBy('name')->get();
+    }
+
+    public function getUsersByRole($role)
+    {
+        return User::where('role', $role)
+            ->where('actif', true)
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function createUser(array $data)
+    {
+        return User::create([
+            'name' => $data['nom'],
+            'numero_telephone' => $data['numero_telephone'],
+            'role' => $data['role'],
+            'code_pin' => $data['code_pin'],
+            'preferred_language' => $data['preferred_language'] ?? 'fr',
+            'actif' => $data['actif'] ?? true,
+        ]);
+    }
+
+    public function updateUser($id, array $data)
+    {
+        $user = User::findOrFail($id);
+        
+        $updateData = [];
+        
+        if (isset($data['nom'])) {
+            $updateData['name'] = $data['nom'];
+        }
+        
+        if (isset($data['numero_telephone'])) {
+            $updateData['numero_telephone'] = $data['numero_telephone'];
+        }
+        
+        if (isset($data['code_pin'])) {
+            $updateData['code_pin'] = $data['code_pin'];
+        }
+        
+        if (isset($data['preferred_language'])) {
+            $updateData['preferred_language'] = $data['preferred_language'];
+        }
+        
+        $user->update($updateData);
+        return $user;
+    }
+
+    public function toggleActif($id)
+    {
+        $user = User::findOrFail($id);
+        $user->actif = !$user->actif;
+        $user->save();
+        return $user;
+    }
+
+    public function deleteUser($id)
+    {
+        $user = User::findOrFail($id);
+        $user->delete();
+        return true;
+    }
+
+    public function getProducteurs()
+    {
+        return $this->getUsersByRole('producteur');
+    }
+
+    public function getPointeurs()
+    {
+        return $this->getUsersByRole('pointeur');
+    }
+
+    public function getVendeursBoulangerie()
+    {
+        return $this->getUsersByRole('vendeur_boulangerie');
+    }
+
+    public function getVendeursPatisserie()
+    {
+        return $this->getUsersByRole('vendeur_patisserie');
+    }
+}
+
+
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\ProduitApiController;
+use App\Http\Controllers\Api\ReceptionApiController;
+use App\Http\Controllers\Api\RetourApiController;
+use App\Http\Controllers\Api\InventaireApiController;
+use App\Http\Controllers\Api\SessionVenteApiController;
+use App\Http\Controllers\Api\FluxProduitApiController;
+use App\Http\Controllers\Api\UserApiController;
+use App\Http\Controllers\Api\PdgApiController;
+/*
+|--------------------------------------------------------------------------
+| API Routes - Boulangerie Pâtisserie
+|--------------------------------------------------------------------------
+*/
+
+//route de test
+Route::get('/test', function () {
+    return response()->json(['message' => 'The ghost is in the shadow.']);
+});
+// Routes publiques
+Route::prefix('auth')->group(function () {
+    Route::post('/inscription', [AuthApiController::class, 'inscription']);
+    Route::post('/connexion', [AuthApiController::class, 'connexion']);
+});
+
+// Routes protégées
+Route::middleware('auth:sanctum')->group(function () {
+    
+    // Auth
+    Route::prefix('auth')->group(function () {
+        Route::post('/deconnexion', [AuthApiController::class, 'deconnexion']);
+        Route::get('/me', [AuthApiController::class, 'me']);
+    });
+
+    // Produits (PDG uniquement pour créer/modifier)
+    Route::prefix('produits')->group(function () {
+        Route::get('/', [ProduitApiController::class, 'index']);
+        Route::get('/categorie/{categorie}', [ProduitApiController::class, 'parCategorie']);
+        Route::post('/', [ProduitApiController::class, 'store'])->middleware('role:pdg');
+        Route::put('/{id}', [ProduitApiController::class, 'update'])->middleware('role:pdg');
+        Route::post('/{id}/toggle-actif', [ProduitApiController::class, 'toggleActif'])->middleware('role:pdg');
+        Route::delete('/{id}', [ProduitApiController::class, 'destroy'])->middleware('role:pdg');
+    });
+
+    // Réceptions (Pointeur uniquement)
+    Route::middleware('role:pointeur')->prefix('receptions')->group(function () {
+        Route::post('/', [ReceptionApiController::class, 'store']);
+        Route::put('/{id}', [ReceptionApiController::class, 'update']);
+        Route::get('/mes-receptions', [ReceptionApiController::class, 'mesReceptions']);
+    });
+
+    // Réceptions pour vendeurs (lecture seule)
+    Route::get('/vendeur/receptions', [ReceptionApiController::class, 'receptionsVendeur'])
+        ->middleware('role:vendeur_boulangerie,vendeur_patisserie');
+
+    // Retours (Pointeur uniquement)
+    Route::middleware('role:pointeur')->prefix('retours')->group(function () {
+        Route::post('/', [RetourApiController::class, 'store']);
+        Route::put('/{id}', [RetourApiController::class, 'update']);
+    });
+
+    // Retours pour vendeurs (lecture seule)
+    Route::get('/vendeur/retours', [RetourApiController::class, 'retoursVendeur'])
+        ->middleware('role:vendeur_boulangerie,vendeur_patisserie');
+
+    // Inventaires (Vendeurs uniquement)
+    Route::middleware('role:vendeur_boulangerie,vendeur_patisserie')->prefix('inventaires')->group(function () {
+        Route::post('/creer', [InventaireApiController::class, 'creer']);
+        Route::get('/mes-inventaires', [InventaireApiController::class, 'mesInventaires']);
+        Route::get('/en-cours', [InventaireApiController::class, 'enCours']);
+    });
+
+    // Sessions de vente
+    Route::prefix('sessions-vente')->group(function () {
+        // Vendeurs
+        Route::middleware('role:vendeur_boulangerie,vendeur_patisserie')->group(function () {
+            Route::post('/ouvrir', [SessionVenteApiController::class, 'ouvrir']);
+            Route::get('/active', [SessionVenteApiController::class, 'getActive']);
+            Route::get('/historique', [SessionVenteApiController::class, 'historique']);
+        });
+        
+        // PDG
+        Route::middleware('role:pdg')->group(function () {
+            Route::get('/{id}', [SessionVenteApiController::class, 'show']);
+            Route::get('/{id}/apercu-ventes', [SessionVenteApiController::class, 'apercuVentes']);
+            Route::post('/{id}/fermer', [SessionVenteApiController::class, 'fermer']);
+        });
+    });
+
+    // Flux de produits
+    Route::prefix('flux')->group(function () {
+        // Vendeurs voient leur propre flux
+        Route::get('/mon-flux', [FluxProduitApiController::class, 'monFlux'])
+            ->middleware('role:vendeur_boulangerie,vendeur_patisserie');
+        
+        // PDG voit tous les flux
+        Route::middleware('role:pdg')->group(function () {
+            Route::get('/vendeur/{vendeurId}', [FluxProduitApiController::class, 'fluxVendeur']);
+            Route::get('/tous', [FluxProduitApiController::class, 'fluxTous']);
+        });
+    });
+
+    // Gestion des utilisateurs (PDG uniquement)
+    Route::middleware('role:pdg')->prefix('users')->group(function () {
+        Route::get('/', [UserApiController::class, 'index']);
+        Route::get('/role/{role}', [UserApiController::class, 'parRole']);
+        Route::get('/producteurs', [UserApiController::class, 'producteurs']);
+        Route::post('/', [UserApiController::class, 'store']);
+        Route::put('/{id}', [UserApiController::class, 'update']);
+        Route::post('/{id}/toggle-actif', [UserApiController::class, 'toggleActif']);
+        Route::delete('/{id}', [UserApiController::class, 'destroy']);
+    });
+
+    Route::prefix('pdg')->middleware(['auth:sanctum', 'role:pdg'])->group(function () {
+    
+    // Dashboard
+    Route::get('/dashboard', [PdgApiController::class, 'dashboard']);
+    
+    // Filtrage des données
+    Route::get('/receptions', [PdgApiController::class, 'getReceptions']);
+    Route::get('/inventaires', [PdgApiController::class, 'getInventaires']);
+    Route::get('/sessions-vente', [PdgApiController::class, 'getSessionsVente']);
+    
+    // Flux opérationnel
+    Route::get('/flux-operationnel', [PdgApiController::class, 'getFluxOperationnel']);
+    Route::get('/flux-operationnel/imprimer', [PdgApiController::class, 'imprimerFluxOperationnel']);
+    
+    // Sessions de vente détaillées
+    Route::get('/sessions-vente-detaillees', [PdgApiController::class, 'getSessionsVenteDetaillees']);
+    Route::get('/sessions-vente-detaillees/imprimer', [PdgApiController::class, 'imprimerSessionsVenteDetaillees']);
+    Route::get('/sessions-vente/{id}/imprimer', [PdgApiController::class, 'imprimerSessionVente']);
+    
+    // Statistiques et analyses
+    Route::get('/statistiques', [PdgApiController::class, 'getStatistiques']);
+    Route::get('/vendeurs-performance', [PdgApiController::class, 'getVendeursPerformance']);
+});
+});
+

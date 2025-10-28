@@ -1,452 +1,1488 @@
-=================================================================
-DOCUMENTATION API - BOULANGERIE PATISSERIE
-Backend développé avec Laravel + Sanctum
-=================================================================
+# 📋 Brief Technique - Frontend Mobile Boulangerie/Pâtisserie
 
-BASE URL: http://localhost/api (je suis en developpement)
+## 🎯 Objectif
+Application mobile de gestion boulangerie/pâtisserie pour **Pointeurs** et **Vendeurs** fonctionnant **totalement offline** avec sync bidirectionnelle vers serveur Laravel.
 
-=================================================================
-AUTHENTIFICATION
-=================================================================
+---
 
-1. INSCRIPTION
-POST /auth/inscription
-Body: {
-  "nom": "string",
-  "numero_telephone": "string (unique)",
-  "role": "pdg|pointeur|vendeur_boulangerie|vendeur_patisserie|producteur",
-  "code_pin": "string (6 caractères)",
-  "code_pdg": "string (requis si role = pdg)",
-  "preferred_language": "fr|en (optionnel, défaut: fr)"
+## 🗃️ Architecture
+
+### Stack Technique
+- **Frontend**: React Native (Expo)
+- **Base locale**: SQLite (via expo-sqlite)
+- **Sync**: Bidirectionnelle automatique avec API Laravel
+- **Authentification**: Token Bearer (Sanctum)
+- **Stockage sécurisé**: Expo SecureStore (token)
+- **Déploiement**: APK Android uniquement
+- **Note**: Le PDG utilise le serveur Laravel directement sur PC
+
+### Structure du Projet
+```
+mobile-app/
+├── src/
+│   ├── api/              # Appels API Laravel
+│   ├── components/       # Composants réutilisables
+│   ├── screens/          # Écrans par rôle
+│   │   ├── auth/
+│   │   ├── pointeur/
+│   │   └── vendeur/
+│   ├── database/         # SQLite setup & migrations
+│   ├── services/         # Logique métier
+│   │   ├── sync/         # Service de synchronisation
+│   │   ├── auth/         # Gestion authentification
+│   │   └── offline/      # Gestion mode offline
+│   ├── utils/            # Helpers & constants
+│   └── navigation/       # Configuration navigation
+├── assets/               # Images, fonts, icons
+└── app.json             # Configuration Expo
+```
+
+---
+
+## 👥 2 Types d'Utilisateurs Mobile
+
+### 1️⃣ **Pointeur** (Tablette/Mobile)
+**Barre icônes**: Réception | Retour | Déconnexion
+
+**Dashboard**: Formulaire direct de réception pré-rempli
+- Réception produit → assigne auto au vendeur actif de la catégorie
+- Retour produit → lié auto au vendeur actif
+- Modification possible si vendeur connecté ET pas de verrou PDG
+
+**Fonctionnalités principales**:
+- Enregistrer réceptions (producteur, produit, quantité)
+- Enregistrer retours (produit, quantité, raison)
+- Visualiser mes réceptions du jour
+- Visualiser mes retours du jour
+- Modifier mes réceptions/retours non verrouillés
+
+### 2️⃣ **Vendeur** (Tablette/Mobile)
+**Dashboard**: Liste produits reçus (entrées du pointeur)
+
+**Barre icônes**: Inventaire | Session caisse | Visualisation réceptions | Visualisation retours
+
+**Fonctionnalités principales**:
+- **Inventaire** : 
+  - Vendeur sortant saisit quantités restantes
+  - Vendeur entrant valide
+  - Les 2 entrent leur PIN 6 chiffres
+  - Switch automatique (sortant déconnecté, entrant connecté)
+- **Session de vente** : 
+  - Créer avec 3 montants (fond vente, Orange Money, MTN Money) - défaut 0
+  - Voir aperçu des ventes en cours
+  - Note: Seul le PDG peut fermer les sessions
+- **Visualisation**:
+  - Mes réceptions du jour
+  - Mes retours du jour
+  - Mon flux de produits (trouvé/reçu/retourné/restant/vendu)
+
+---
+
+## 🔐 Authentification
+
+### PREMIER USAGE (nécessite réseau):
+1. Créer compte (nom, téléphone, rôle, PIN 6 chiffres)
+   - Note: Le code PDG n'est pas géré dans l'app mobile
+2. Sync données initiales → Prêt
+
+### USAGES SUIVANTS:
+- **ONLINE**: PIN → Sync auto
+- **OFFLINE**: PIN → Accès local
+
+---
+
+## 🗄️ Tables Principales SQLite
+
+### users
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  numero_telephone TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL,
+  code_pin TEXT NOT NULL,
+  actif BOOLEAN DEFAULT 1,
+  preferred_language TEXT DEFAULT 'fr',
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'synced', -- 'synced' | 'pending' | 'conflict'
+  last_synced_at TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+```
+
+### produits
+```sql
+CREATE TABLE produits (
+  id INTEGER PRIMARY KEY,
+  nom TEXT NOT NULL,
+  prix REAL NOT NULL,
+  categorie TEXT NOT NULL, -- 'boulangerie' | 'patisserie'
+  actif BOOLEAN DEFAULT 1,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'synced',
+  last_synced_at TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+```
+
+### vendeurs_actifs
+```sql
+CREATE TABLE vendeurs_actifs (
+  id INTEGER PRIMARY KEY,
+  categorie TEXT UNIQUE NOT NULL,
+  vendeur_id INTEGER NOT NULL,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'synced',
+  last_synced_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY (vendeur_id) REFERENCES users(id)
+);
+```
+
+### receptions_pointeur
+```sql
+CREATE TABLE receptions_pointeur (
+  id INTEGER PRIMARY KEY,
+  local_id TEXT UNIQUE, -- UUID généré localement
+  pointeur_id INTEGER NOT NULL,
+  producteur_id INTEGER NOT NULL,
+  produit_id INTEGER NOT NULL,
+  quantite INTEGER NOT NULL,
+  vendeur_assigne_id INTEGER,
+  verrou BOOLEAN DEFAULT 0,
+  date_reception TEXT NOT NULL,
+  notes TEXT,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'pending',
+  last_synced_at TEXT,
+  created_at_local TEXT,
+  updated_at_local TEXT,
+  FOREIGN KEY (pointeur_id) REFERENCES users(id),
+  FOREIGN KEY (producteur_id) REFERENCES users(id),
+  FOREIGN KEY (produit_id) REFERENCES produits(id),
+  FOREIGN KEY (vendeur_assigne_id) REFERENCES users(id)
+);
+```
+
+### retours_produits
+```sql
+CREATE TABLE retours_produits (
+  id INTEGER PRIMARY KEY,
+  local_id TEXT UNIQUE,
+  pointeur_id INTEGER NOT NULL,
+  vendeur_id INTEGER,
+  produit_id INTEGER NOT NULL,
+  quantite INTEGER NOT NULL,
+  raison TEXT NOT NULL, -- 'perime' | 'abime' | 'autre'
+  description TEXT,
+  verrou BOOLEAN DEFAULT 0,
+  date_retour TEXT NOT NULL,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'pending',
+  last_synced_at TEXT,
+  created_at_local TEXT,
+  updated_at_local TEXT,
+  FOREIGN KEY (pointeur_id) REFERENCES users(id),
+  FOREIGN KEY (vendeur_id) REFERENCES users(id),
+  FOREIGN KEY (produit_id) REFERENCES produits(id)
+);
+```
+
+### inventaires
+```sql
+CREATE TABLE inventaires (
+  id INTEGER PRIMARY KEY,
+  local_id TEXT UNIQUE,
+  vendeur_sortant_id INTEGER NOT NULL,
+  vendeur_entrant_id INTEGER NOT NULL,
+  categorie TEXT NOT NULL,
+  valide_sortant BOOLEAN DEFAULT 0,
+  valide_entrant BOOLEAN DEFAULT 0,
+  date_inventaire TEXT NOT NULL,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'pending',
+  last_synced_at TEXT,
+  created_at_local TEXT,
+  updated_at_local TEXT,
+  FOREIGN KEY (vendeur_sortant_id) REFERENCES users(id),
+  FOREIGN KEY (vendeur_entrant_id) REFERENCES users(id)
+);
+```
+
+### inventaire_details
+```sql
+CREATE TABLE inventaire_details (
+  id INTEGER PRIMARY KEY,
+  local_id TEXT UNIQUE,
+  inventaire_id INTEGER NOT NULL,
+  produit_id INTEGER NOT NULL,
+  quantite_restante INTEGER NOT NULL,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'pending',
+  last_synced_at TEXT,
+  FOREIGN KEY (inventaire_id) REFERENCES inventaires(id),
+  FOREIGN KEY (produit_id) REFERENCES produits(id)
+);
+```
+
+### sessions_vente
+```sql
+CREATE TABLE sessions_vente (
+  id INTEGER PRIMARY KEY,
+  local_id TEXT UNIQUE,
+  vendeur_id INTEGER NOT NULL,
+  categorie TEXT NOT NULL,
+  fond_vente REAL DEFAULT 0,
+  orange_money_initial REAL DEFAULT 0,
+  mtn_money_initial REAL DEFAULT 0,
+  orange_money_final REAL,
+  mtn_money_final REAL,
+  montant_verse REAL,
+  manquant REAL,
+  statut TEXT DEFAULT 'ouverte', -- 'ouverte' | 'fermee'
+  date_ouverture TEXT NOT NULL,
+  date_fermeture TEXT,
+  -- Champs de synchronisation
+  sync_status TEXT DEFAULT 'pending',
+  last_synced_at TEXT,
+  created_at_local TEXT,
+  updated_at_local TEXT,
+  FOREIGN KEY (vendeur_id) REFERENCES users(id)
+);
+```
+
+### sync_queue (Table technique pour gérer la queue de sync)
+```sql
+CREATE TABLE sync_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_name TEXT NOT NULL,
+  record_id TEXT NOT NULL, -- local_id ou id
+  operation TEXT NOT NULL, -- 'create' | 'update' | 'delete'
+  data TEXT NOT NULL, -- JSON des données
+  retry_count INTEGER DEFAULT 0,
+  last_error TEXT,
+  created_at TEXT NOT NULL
+);
+```
+
+---
+
+## 📡 API Endpoints & Formats de Réponse
+
+### 1. Authentification
+
+#### POST /auth/inscription
+**Request**:
+```json
+{
+  "nom": "Jean Dupont",
+  "numero_telephone": "699123456",
+  "role": "pointeur",
+  "code_pin": "123456",
+  "preferred_language": "fr"
 }
+```
 
-2. CONNEXION
-POST /auth/connexion
-Body: {
-  "numero_telephone": "string",
-  "code_pin": "string"
+**Response Success (201)**:
+```json
+{
+  "success": true,
+  "message": "Inscription réussie",
+  "data": {
+    "id": 1,
+    "name": "Jean Dupont",
+    "numero_telephone": "699123456",
+    "role": "pointeur",
+    "actif": true,
+    "preferred_language": "fr"
+  }
 }
-Response: { "user": {...}, "token": "..." }
+```
 
-3. DÉCONNEXION
-POST /auth/deconnexion
-Headers: Authorization: Bearer {token}
-
-4. UTILISATEUR CONNECTÉ
-GET /auth/me
-Headers: Authorization: Bearer {token}
-
-=================================================================
-PRODUITS (Tous peuvent lire, PDG seulement pour CRUD)
-=================================================================
-
-GET /produits - Liste tous les produits
-GET /produits/categorie/{boulangerie|patisserie} - Par catégorie
-POST /produits - Créer (PDG uniquement)
-PUT /produits/{id} - Modifier (PDG uniquement)
-POST /produits/{id}/toggle-actif - Activer/Désactiver (PDG)
-DELETE /produits/{id} - Supprimer (PDG)
-
-=================================================================
-RÉCEPTIONS (Pointeur uniquement)
-=================================================================
-
-POST /receptions
-Body: {
-  "producteur_id": "number",
-  "produit_id": "number",
-  "quantite": "number",
-  "notes": "string (optionnel)"
+**Response Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Le numéro de téléphone est déjà utilisé"
 }
+```
 
-PUT /receptions/{id} - Modifier une réception
-GET /receptions/mes-receptions?date=YYYY-MM-DD - Liste réceptions
-GET /vendeur/receptions?date=YYYY-MM-DD - Vendeur voit ses réceptions
-
-=================================================================
-RETOURS (Pointeur uniquement)
-=================================================================
-
-POST /retours
-Body: {
-  "produit_id": "number",
-  "quantite": "number",
-  "raison": "gate|perime|defectueux|autre",
-  "description": "string (optionnel)"
+#### POST /auth/connexion
+**Request**:
+```json
+{
+  "numero_telephone": "699123456",
+  "code_pin": "123456"
 }
+```
 
-PUT /retours/{id} - Modifier un retour
-GET /vendeur/retours?date=YYYY-MM-DD - Vendeur voit ses retours
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "message": "Connexion réussie",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Jean Dupont",
+      "numero_telephone": "699123456",
+      "role": "pointeur",
+      "actif": true,
+      "preferred_language": "fr"
+    },
+    "token": "1|abcdef123456..."
+  }
+}
+```
 
-=================================================================
-INVENTAIRES (Vendeurs uniquement)
-=================================================================
+**Response Error (401)**:
+```json
+{
+  "success": false,
+  "message": "Numéro de téléphone ou code PIN incorrect"
+}
+```
 
-POST /inventaires/creer
-Body: {
-  "vendeur_entrant_id": "number",
-  "produits": [
+#### POST /auth/deconnexion
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "message": "Déconnexion réussie"
+}
+```
+
+#### GET /auth/me
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Jean Dupont",
+    "numero_telephone": "699123456",
+    "role": "pointeur",
+    "actif": true,
+    "preferred_language": "fr"
+  }
+}
+```
+
+---
+
+### 2. Produits
+
+#### GET /produits?actif_only=true
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
     {
-      "produit_id": "number",
-      "quantite_restante": "number"
+      "id": 1,
+      "nom": "Pain complet",
+      "categorie": "boulangerie",
+      "prix": 500,
+      "actif": true,
+      "created_at": "2025-01-01T00:00:00.000000Z",
+      "updated_at": "2025-01-01T00:00:00.000000Z"
+    },
+    {
+      "id": 2,
+      "nom": "Croissant",
+      "categorie": "patisserie",
+      "prix": 300,
+      "actif": true,
+      "created_at": "2025-01-01T00:00:00.000000Z",
+      "updated_at": "2025-01-01T00:00:00.000000Z"
     }
   ]
 }
+```
 
-POST /inventaires/{id}/valider
-Body: {
-  "code_pin": "string (6 caractères)",
-  "type": "sortant|entrant"
+#### GET /produits/categorie/{boulangerie|patisserie}?actif_only=true
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "nom": "Pain complet",
+      "categorie": "boulangerie",
+      "prix": 500,
+      "actif": true,
+      "created_at": "2025-01-01T00:00:00.000000Z",
+      "updated_at": "2025-01-01T00:00:00.000000Z"
+    }
+  ]
 }
+```
 
-GET /inventaires/mes-inventaires - Liste inventaires du vendeur
-GET /inventaires/en-cours - Inventaire en attente de validation
+---
 
-=================================================================
-SESSIONS DE VENTE
-=================================================================
+### 3. Réceptions (Pointeur)
 
-VENDEUR:
-POST /sessions-vente/creer
-Body: {
-  "fond_vente": "number (optionnel, défaut: 0)",
-  "orange_money_initial": "number (optionnel, défaut: 0)",
-  "mtn_money_initial": "number (optionnel, défaut: 0)"
+#### POST /receptions
+**Headers**: `Authorization: Bearer {token}`
+
+**Request**:
+```json
+{
+  "producteur_id": 5,
+  "produit_id": 1,
+  "quantite": 50,
+  "notes": "Livraison du matin"
 }
+```
 
-GET /sessions-vente/active - Session active du vendeur
-GET /sessions-vente/mes-sessions - Historique sessions
-
-PDG:
-POST /sessions-vente/{id}/fermer
-Body: {
-  "montant_verse": "number",
-  "orange_money_final": "number",
-  "mtn_money_final": "number",
-  "ventes_totales": "number"
-}
-
-GET /sessions-vente/toutes - Toutes les sessions
-
-=================================================================
-FLUX DE PRODUITS
-=================================================================
-
-VENDEUR:
-GET /flux/mon-flux?date=YYYY-MM-DD
-Response: [
-  {
-    "produit": {...},
-    "quantite_trouvee": "number",
-    "quantite_recue": "number",
-    "quantite_retour": "number",
-    "quantite_restante": "number",
-    "quantite_vendue": "number",
-    "valeur_vente": "number"
+**Response Success (201)**:
+```json
+{
+  "success": true,
+  "message": "Réception enregistrée avec succès",
+  "data": {
+    "id": 1,
+    "pointeur_id": 2,
+    "producteur_id": 5,
+    "produit_id": 1,
+    "quantite": 50,
+    "vendeur_assigne_id": 3,
+    "verrou": false,
+    "date_reception": "2025-10-22T10:30:00.000000Z",
+    "notes": "Livraison du matin",
+    "created_at": "2025-10-22T10:30:00.000000Z",
+    "updated_at": "2025-10-22T10:30:00.000000Z",
+    "produit": {
+      "id": 1,
+      "nom": "Pain complet",
+      "categorie": "boulangerie",
+      "prix": 500
+    },
+    "producteur": {
+      "id": 5,
+      "name": "Boulangerie Martin",
+      "numero_telephone": "699111222"
+    },
+    "vendeurAssigne": {
+      "id": 3,
+      "name": "Marie Kouam",
+      "role": "vendeur_boulangerie"
+    }
   }
-]
+}
+```
 
-PDG:
-GET /flux/vendeur/{vendeurId}?date=YYYY-MM-DD
-GET /flux/tous?date=YYYY-MM-DD
+**Response Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Aucun vendeur actif pour cette catégorie de produit"
+}
+```
 
-=================================================================
-GESTION UTILISATEURS (PDG uniquement)
-=================================================================
+#### PUT /receptions/{id}
+**Headers**: `Authorization: Bearer {token}`
 
-GET /users - Tous les utilisateurs
-GET /users/role/{role} - Par rôle
-GET /users/producteurs - Liste producteurs
-POST /users - Créer utilisateur
-PUT /users/{id} - Modifier
-POST /users/{id}/toggle-actif - Activer/Désactiver
-DELETE /users/{id} - Supprimer
+**Request**:
+```json
+{
+  "quantite": 55,
+  "notes": "Livraison du matin - rectifiée"
+}
+```
 
-=================================================================
-RÔLES ET PERMISSIONS
-=================================================================
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "message": "Réception mise à jour avec succès",
+  "data": {
+    "id": 1,
+    "pointeur_id": 2,
+    "producteur_id": 5,
+    "produit_id": 1,
+    "quantite": 55,
+    "vendeur_assigne_id": 3,
+    "verrou": false,
+    "date_reception": "2025-10-22T10:30:00.000000Z",
+    "notes": "Livraison du matin - rectifiée",
+    "updated_at": "2025-10-22T10:45:00.000000Z"
+  }
+}
+```
 
-- pdg: Accès complet, gestion utilisateurs, fermeture sessions
-- pointeur: Créer/modifier réceptions et retours
-- vendeur_boulangerie: Inventaires et sessions catégorie boulangerie
-- vendeur_patisserie: Inventaires et sessions catégorie pâtisserie
-- producteur: Aucun accès API (juste référence)
+**Response Error (403)**:
+```json
+{
+  "success": false,
+  "message": "Cette réception est verrouillée et ne peut plus être modifiée"
+}
+```
 
-=================================================================
-CODE PDG PAR DÉFAUT
-=================================================================
-Code: PDG2025SECURE
-(À modifier dans la table config_pdg)
+#### GET /receptions/mes-receptions?date=2025-10-22
+**Headers**: `Authorization: Bearer {token}`
 
-=================================================================
-NOTES IMPORTANTES
-=================================================================
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "pointeur_id": 2,
+      "producteur_id": 5,
+      "produit_id": 1,
+      "quantite": 50,
+      "vendeur_assigne_id": 3,
+      "verrou": false,
+      "date_reception": "2025-10-22T10:30:00.000000Z",
+      "notes": "Livraison du matin",
+      "produit": {
+        "id": 1,
+        "nom": "Pain complet",
+        "prix": 500
+      },
+      "producteur": {
+        "id": 5,
+        "name": "Boulangerie Martin"
+      },
+      "vendeurAssigne": {
+        "id": 3,
+        "name": "Marie Kouam"
+      }
+    }
+  ]
+}
+```
 
-1. Toutes les routes protégées nécessitent le header:
-   Authorization: Bearer {token}
+#### GET /vendeur/receptions?date=2025-10-22
+**Headers**: `Authorization: Bearer {token}`
 
-2. Les vendeurs sont automatiquement assignés aux réceptions/retours
-   selon la catégorie du produit et le vendeur actif
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "produit_id": 1,
+      "quantite": 50,
+      "date_reception": "2025-10-22T10:30:00.000000Z",
+      "notes": "Livraison du matin",
+      "produit": {
+        "id": 1,
+        "nom": "Pain complet",
+        "categorie": "boulangerie",
+        "prix": 500
+      },
+      "producteur": {
+        "id": 5,
+        "name": "Boulangerie Martin"
+      }
+    }
+  ]
+}
+```
 
-3. L'inventaire change automatiquement le vendeur actif après 
-   validation des deux parties
+---
 
-4. Les modifications de réceptions/retours sont bloquées si:
-   - Le vendeur n'est plus actif
-   - Le verrou est activé (par PDG)
+### 4. Retours (Pointeur)
 
-5. Formule manquant session:
-   Manquant = (Ventes totales - Fond) - (Versé + Diff OM + Diff MTN)
+#### POST /retours
+**Headers**: `Authorization: Bearer {token}`
 
-=================================================================
+**Request**:
+```json
+{
+  "produit_id": 1,
+  "quantite": 5,
+  "raison": "abime",
+  "description": "Pain brûlé"
+}
+```
+
+**Response Success (201)**:
+```json
+{
+  "success": true,
+  "message": "Retour enregistré avec succès",
+  "data": {
+    "id": 1,
+    "pointeur_id": 2,
+    "vendeur_id": 3,
+    "produit_id": 1,
+    "quantite": 5,
+    "raison": "abime",
+    "description": "Pain brûlé",
+    "verrou": false,
+    "date_retour": "2025-10-22T14:00:00.000000Z",
+    "created_at": "2025-10-22T14:00:00.000000Z",
+    "produit": {
+      "id": 1,
+      "nom": "Pain complet",
+      "categorie": "boulangerie"
+    },
+    "vendeur": {
+      "id": 3,
+      "name": "Marie Kouam"
+    }
+  }
+}
+```
+
+**Response Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Aucun vendeur actif pour cette catégorie de produit"
+}
+```
+
+#### PUT /retours/{id}
+**Headers**: `Authorization: Bearer {token}`
+
+**Request**:
+```json
+{
+  "quantite": 6,
+  "raison": "abime",
+  "description": "Pain brûlé - quantité rectifiée"
+}
+```
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "message": "Retour mis à jour avec succès",
+  "data": {
+    "id": 1,
+    "pointeur_id": 2,
+    "vendeur_id": 3,
+    "produit_id": 1,
+    "quantite": 6,
+    "raison": "abime",
+    "description": "Pain brûlé - quantité rectifiée",
+    "verrou": false,
+    "updated_at": "2025-10-22T14:15:00.000000Z"
+  }
+}
+```
+
+#### GET /vendeur/retours?date=2025-10-22
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "produit_id": 1,
+      "quantite": 5,
+      "raison": "abime",
+      "description": "Pain brûlé",
+      "date_retour": "2025-10-22T14:00:00.000000Z",
+      "produit": {
+        "id": 1,
+        "nom": "Pain complet",
+        "categorie": "boulangerie",
+        "prix": 500
+      },
+      "pointeur": {
+        "id": 2,
+        "name": "Jean Dupont"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### 5. Inventaires (Vendeurs)
+
+#### POST /inventaires/creer
+**Headers**: `Authorization: Bearer {token}`
+
+**Request**:
+```json
+{
+  "vendeur_sortant_id": 3,
+  "vendeur_entrant_id": 4,
+  "code_pin_sortant": "123456",
+  "code_pin_entrant": "654321",
+  "produits": [
+    {
+      "produit_id": 1,
+      "quantite_restante": 45
+    },
+    {
+      "produit_id": 2,
+      "quantite_restante": 30
+    }
+  ]
+}
+```
+
+**Response Success (201)**:
+```json
+{
+  "success": true,
+  "message": "Inventaire créé et validé avec succès par les deux parties",
+  "data": {
+    "id": 1,
+    "vendeur_sortant_id": 3,
+    "vendeur_entrant_id": 4,
+    "categorie": "boulangerie",
+    "date_inventaire": "2025-10-22T16:00:00.000000Z",
+    "valide_sortant": true,
+    "valide_entrant": true,
+    "created_at": "2025-10-22T16:00:00.000000Z",
+    "details": [
+      {
+        "id": 1,
+        "inventaire_id": 1,
+        "produit_id": 1,
+        "quantite_restante": 45,
+        "produit": {
+          "id": 1,
+          "nom": "Pain complet",
+          "prix": 500
+        }
+      },
+      {
+        "id": 2,
+        "inventaire_id": 1,
+        "produit_id": 2,
+        "quantite_restante": 30,
+        "produit": {
+          "id": 2,
+          "nom": "Baguette",
+          "prix": 200
+        }
+      }
+    ],
+    "vendeurSortant": {
+      "id": 3,
+      "name": "Marie Kouam",
+      "role": "vendeur_boulangerie"
+    },
+    "vendeurEntrant": {
+      "id": 4,
+      "name": "Paul Nkolo",
+      "role": "vendeur_boulangerie"
+    }
+  }
+}
+```
+
+**Response Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Les deux vendeurs doivent être de la même catégorie"
+}
+```
+
+**Response Error (401)**:
+```json
+{
+  "success": false,
+  "message": "Code PIN incorrect pour le vendeur sortant"
+}
+```
+
+#### GET /inventaires/mes-inventaires
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "vendeur_sortant_id": 3,
+      "vendeur_entrant_id": 4,
+      "categorie": "boulangerie",
+      "date_inventaire": "2025-10-22T16:00:00.000000Z",
+      "valide_sortant": true,
+      "valide_entrant": true,
+      "details": [
+        {
+          "produit_id": 1,
+          "quantite_restante": 45,
+          "produit": {
+            "nom": "Pain complet",
+            "prix": 500
+          }
+        }
+      ],
+      "vendeurSortant": {
+        "id": 3,
+        "name": "Marie Kouam"
+      },
+      "vendeurEntrant": {
+        "id": 4,
+        "name": "Paul Nkolo"
+      }
+    }
+  ]
+}
+```
+
+#### GET /inventaires/en-cours
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)** - Si inventaire en cours:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "vendeur_sortant_id": 3,
+    "vendeur_entrant_id": 4,
+    "categorie": "boulangerie",
+    "valide_sortant": false,
+    "valide_entrant": false,
+    "details": []
+  }
+}
+```
+
+**Response Success (200)** - Si aucun inventaire en cours:
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+---
+
+### 6. Sessions de Vente (Vendeurs)
+
+#### POST /sessions-vente/ouvrir
+**Headers**: `Authorization: Bearer {token}`
+
+**Request**:
+```json
+{
+  "categorie": "boulangerie",
+  "fond_vente": 10000,
+  "orange_money_initial": 5000,
+  "mtn_money_initial": 3000
+}
+```
+
+**Response Success (201)**:
+```json
+{
+  "success": true,
+  "message": "Session ouverte avec succès",
+  "data": {
+    "id": 1,
+    "vendeur_id": 3,
+    "categorie": "boulangerie",
+    "fond_vente": 10000,
+    "orange_money_initial": 5000,
+    "mtn_money_initial": 3000,
+    "orange_money_final": null,
+    "mtn_money_final": null,
+    "montant_verse": null,
+    "manquant": null,
+    "statut": "ouverte",
+    "date_ouverture": "2025-10-22T08:00:00.000000Z",
+    "date_fermeture": null,
+    "created_at": "2025-10-22T08:00:00.000000Z",
+    "vendeur": {
+      "id": 3,
+      "name": "Marie Kouam",
+      "role": "vendeur_boulangerie"
+    }
+  }
+}
+```
+
+**Response Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Vous avez déjà une session ouverte"
+}
+```
+
+#### GET /sessions-vente/active
+**Headers**: `Authorization: Bearer {token}`
+
+**Response Success (200)** - Session active:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "vendeur_id": 3,
+    "categorie": "boulangerie",
+    "fond_vente": 10000,
+    "orange_money_initial": 5000,
+    "mtn_money_initial": 3000,
+    "statut": "ouverte",
+    "date_ouverture": "2025-10-22T08:00:00.000000Z",
+    "vendeur": {
+      "id": 3,
+      "name": "Marie Kouam"
+    }
+  }
+}
+```
+
+**Response Success (200)** - Aucune session active:
+```json
+{
+  "success": true,
+  "data": null
+}
+```
 
 
-🧾 Résumé projet — Application Boulangerie / Pâtisserie (Frontend)
-🎯 Objectif
+#### GET /sessions-vente/historique?statut=fermee&date_debut=2025-10-01&date_fin=2025-10-31
+**Headers**: `Authorization: Bearer {token}`
 
-Développer une application de gestion de boulangerie-pâtisserie qui fonctionne :
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "vendeur_id": 3,
+      "categorie": "boulangerie",
+      "fond_vente": 10000,
+      "orange_money_initial": 5000,
+      "mtn_money_initial": 3000,
+      "orange_money_final": 8000,
+      "mtn_money_final": 6000,
+      "montant_verse": 155000,
+      "manquant": 5000,
+      "statut": "fermee",
+      "date_ouverture": "2025-10-22T08:00:00.000000Z",
+      "date_fermeture": "2025-10-22T18:00:00.000000Z",
+      "vendeur": {
+        "id": 3,
+        "name": "Marie Kouam"
+      }
+    }
+  ]
+}
+```
 
-en réseau local (Wi-Fi, sans Internet)
+---
 
-avec un serveur Laravel (déjà prêt) qui expose des API JSON
+### 7. Flux de Produits (Vendeurs)
 
-utilisable à la fois sur tablettes (Android) et ordinateur du PDG (Windows PC)
+#### GET /flux/mon-flux?date=2025-10-22
+**Headers**: `Authorization: Bearer {token}`
 
-⚙️ Architecture globale
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "periode": {
+      "debut": "2025-10-22T08:00:00.000000Z",
+      "fin": "2025-10-22T18:00:00.000000Z"
+    },
+    "flux": [
+      {
+        "produit": {
+          "id": 1,
+          "nom": "Pain complet",
+          "categorie": "boulangerie",
+          "prix": 500
+        },
+        "quantite_trouvee": 50,
+        "quantite_recue": 100,
+        "quantite_retour": 5,
+        "quantite_restante": 45,
+        "quantite_vendue": 100,
+        "valeur_vente": 50000
+      },
+      {
+        "produit": {
+          "id": 2,
+          "nom": "Baguette",
+          "categorie": "boulangerie",
+          "prix": 200
+        },
+        "quantite_trouvee": 80,
+        "quantite_recue": 200,
+        "quantite_retour": 10,
+        "quantite_restante": 70,
+        "quantite_vendue": 200,
+        "valeur_vente": 40000
+      }
+    ],
+    "total_ventes": 90000
+  }
+}
+```
 
-Backend : Laravel (serveur local, IP fixe ex: http://192.168.0.10/api)
+**Formule de calcul du flux**:
+```
+quantite_trouvee = stock initial (de l'inventaire d'ouverture)
+quantite_recue = total des réceptions du jour
+quantite_retour = total des retours du jour
+quantite_restante = stock final (de l'inventaire de fermeture)
+quantite_vendue = quantite_trouvee + quantite_recue - quantite_retour - quantite_restante
+valeur_vente = quantite_vendue × prix_unitaire
+```
 
-Frontend : React Native (avec Expo)
+---
 
-Déploiement :
+### 8. Utilisateurs (Liste Producteurs)
 
-Tablettes → APK Android
+#### GET /users/producteurs
+**Headers**: `Authorization: Bearer {token}`
 
-PC → App Electron (EXE) basée sur React Native Web
+**Response Success (200)**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 5,
+      "name": "Boulangerie Martin",
+      "numero_telephone": "699111222",
+      "role": "producteur",
+      "actif": true
+    },
+    {
+      "id": 6,
+      "name": "Pâtisserie Divine",
+      "numero_telephone": "699333444",
+      "role": "producteur",
+      "actif": true
+    }
+  ]
+}
+```
 
-🧱 Stack technique front-end
-Fonction	Technologie
-Framework principal	React Native (Expo)
-Mode web / desktop	React Native Web + Electron
-Communication API	Axios vers backend Laravel
-Stockage local (offline)	SQLite via expo-sqlite
-Détection réseau	@react-native-community/netinfo
-Gestion offline/sync	Code custom (SQLite → Laravel API)
-Design responsive	Flexbox + Dimensions API
+---
 
-voici la description de l'application
+## 🔄 Stratégie de Synchronisation
 
-on va developper une app pour une boulangerie patisserie
-elle va fonctionner en offline 
-le pdg utilisera sur sa machine (serveur)
-le pointeur sur une tablette
-les vendeurs sur une tablette
-on va faire evoluer l'application au fur et a mesure
+### Sync Initiale (Premier usage)
+1. Connexion avec token
+2. Télécharger tous les produits actifs
+3. Télécharger liste producteurs
+4. Télécharger vendeurs actifs par catégorie
+5. Télécharger mes données historiques (7 derniers jours)
 
-pour l'instant on veut la premiere fonctionnaliter (flux de produit patisserie)
+### Sync Régulière (Toutes les 30-60s si connecté)
 
-premierement on a des produits (defini par leur nom , prix , categorie(boulangerie ou patisserie)
+#### 1. Upload (Envoyer modifications locales)
+Parcourir la table `sync_queue` et envoyer dans l'ordre :
+- Nouvelles réceptions/retours (`sync_status = 'pending'`)
+- Nouveaux inventaires (`sync_status = 'pending'`)
+- Nouvelles sessions ouvertes (`sync_status = 'pending'`)
+- Modifications non synchronisées
 
-ensuite on a les pointeurs , les vendeurs et le pdg
+**Process**:
+```javascript
+// Exemple pour une réception
+const receptionLocal = {
+  local_id: "uuid-123",
+  pointeur_id: 2,
+  producteur_id: 5,
+  produit_id: 1,
+  quantite: 50,
+  notes: "Livraison matin"
+};
 
-les pointeur rexoivent les produits des producteurs et les passe au vendeurs direct
-les pointeurs sont les hommes de confiance
-il y'a un seul vendeur a la fois pour chaque categorie en place (xa veut dire qu'a un moment precis il y'a un seul vendeur qui vend pour chaque categorie " un seul patisserie et un seul boulangerie)
+// POST vers API
+const response = await api.post('/receptions', receptionLocal);
 
-lorsque le pointeur declare qu'il a recu un produit d'un producteur on assigne directement le produit et la quantite recu au vendeur qui est entrain de travailler pour la categorie du produit
-le pointeur enregistre aussi les retour de produits (les produits peuvent etre retourner pour differente raison (gater , perimer ...))
-lorsque le pointeur enregistre un retour de produit le serveur responsable du retour est automatiquement le serveur connecter pour la categorie du produit en question et le retour est directement lier au serveur
-le pointeur peut modifier a les infos relative a une reception (qui modifiera aussi au niveau du serveur)
-mais il ne peut plus modifier lorsque le serveur n'est plus connecter ou lorsque un verrou logique a ete declencher (par le pdg dans ce cas))
-le vendeur n'a que 3  chose a faire avec l'application (l'inventaire)
+if (response.success) {
+  // Mettre à jour avec l'ID serveur
+  await db.update('receptions_pointeur', {
+    id: response.data.id,
+    sync_status: 'synced',
+    last_synced_at: new Date().toISOString()
+  }, { local_id: "uuid-123" });
+  
+  // Supprimer de la queue
+  await db.delete('sync_queue', { record_id: "uuid-123" });
+}
+```
 
-l'inventaire est l'operation realiser a chaque fois qu'il y'a changement de vendeur:
-il consiste au serveur sortant de preciser pour chaque produit la quantite laisser a son depart
-le vendeur entrant voit alors cela et consulte la liste qui s'es former au fur et  a mesure de l'ajout et ensuite les deux valide l'operation en  entrant leur code pin respectif
-a rappeler que c'est le serveur connecter qui fait l'inventaire et il est directement considerer comme le serveur sortant et il precise a chaque fois qui est le serveur entrant
-et apres l'operation d'inventaire reussi on deconnecte directement le vendeur sortant et on connecte le vendeur entrant et le systeme le marque automatiquement comme le vendeur actif pour la categorie en question
+#### 2. Download (Recevoir mises à jour)
+Récupérer les données modifiées depuis `last_synced_at` :
+- Nouveaux produits/modifications
+- Nouveaux vendeurs actifs
+- Verrouillages appliqués par PDG
+- Sessions fermées par PDG
+- Modifications de prix
 
-chaque vendeur a deux operation d'inventaire un quand il arrive en tant qu'entrant et un quand il s'en va en tant que sortant
+**Process**:
+```javascript
+// Récupérer dernière sync
+const lastSync = await db.getLastSyncTime();
 
-le vendeur peut creer session de vente qui est en effet une journee de vente
-pour creer une session de vente le vendeur precise trois montant : le montant obtenu pour les ventes(fond de vente) , le montant trouver dans orange money , le montant trouver dans mtn money
-par defaut tout ces montant sont a 0
+// Télécharger mises à jour
+const updates = await api.get(`/sync/updates?since=${lastSync}`);
 
-la session de caisse est fermer par le pdg
+// Appliquer en base locale
+for (const produit of updates.produits) {
+  await db.upsert('produits', produit);
+}
 
-enfin le serveur peut visualiser la liste des entrer de la journee (pour verifier que le pointeur ne se soit pas tromper vu que chaque reception du pointeur creer automatiquement une entrer dans la table du vendeur et chaque modification aussi)
-a
+for (const reception of updates.receptions) {
+  if (reception.verrou) {
+    await db.update('receptions_pointeur', 
+      { verrou: true }, 
+      { id: reception.id }
+    );
+  }
+}
+```
 
-le pdg
-c'est le boss 
-il a 5 fonctionnaliter
-1-visualiser la liste du flux de produit
+### Gestion des Conflits
+- **Last-write-wins** pour la plupart des cas
+- **Priorité serveur** pour:
+  - Statut actif/inactif des utilisateurs
+  - Verrouillages (verrou = true)
+  - Fermeture de sessions
+  - Prix des produits
+- **Notification utilisateur** en cas de conflit majeur
 
-la liste de flux de produit est une liste simple qui pour chaque serveur affiche
+### Mode Offline
+- Toutes les opérations fonctionnent en local
+- Marquage `sync_status = 'pending'`
+- Ajout dans `sync_queue`
+- Queue de synchronisation à la reconnexion
+- Indication visuelle des données non synchronisées
 
-pour chaque produit , la quantite trouver en arrivant (via l'inventaire) , la quantite recu pendant le journee (recu du pointeur) , la quantite retourner , la quantite restante au depart (2e inventaire) , la quantite vendu calculer (entreer+trouver-retour-restant)
+---
 
-2-modifier toutes les infos dans le cas ou il  ya une erreur (une reception , un retour , un inventaire ... et cette modification doit se repercuter sur les tables qui en dependent quand c'est le cas
+## 📱 Écrans Principaux
 
-3-fermer une session de vente : le pdg precise simplement le montant verser par le vendeur , le montant final dans mobile money ,le montant final dans orange money
-apres avoir specifier tout cela le manquant est automatiquement calculer en utilisant la formule Manquant = (somme total de vente - Fond de vente) - (Montant versé + Diff OM + Diff MTN)
+### Écrans Communs
 
-4-CRUD et activation/desactivation sur les utilisateur (employer)
-5-CRUD sur le produits (en precisant a chaque fois la categories)
-un utilisateur doit un role (pdg,producteur,pointeur,vendeur boulangerie, vendeur patisserie)
+#### 1. Login
+- Input: Numéro de téléphone
+- Input: Code PIN (6 chiffres, masqué)
+- Bouton: Se connecter
+- Lien: Créer un compte
+- Indicateur: État connexion réseau
 
-tu vas developper un controlleur WorkpaceSwitcherController qui sera utiliser lors des login
+#### 2. Inscription
+- Input: Nom complet
+- Input: Numéro de téléphone
+- Select: Rôle (pointeur/vendeur_boulangerie/vendeur_patisserie)
+- Input: Code PIN (6 chiffres, confirmation)
+- Bouton: S'inscrire
+- Note: Nécessite connexion Internet
 
-on va travailler toujours sur une architecture baser responsabiliter
+---
 
-les services pour la logique metier (ils renvoient des json) , deux controlleur (API et l'autre normale qui renvoie les vues blade) mais qui appele le meme service
+### Écrans Pointeur
 
-en effet le controlleur qui renvoie les json sera utiliser par react native et le controlleur pc sera utiliser pour la partie web
+#### 3. Dashboard Pointeur
+- **Header**: 
+  - Icône réception (actif)
+  - Icône retour
+  - Icône déconnexion
+  - Indicateur sync
+- **Formulaire Réception Direct**:
+  - Select: Producteur (recherche)
+  - Select: Produit (recherche)
+  - Input: Quantité (numérique)
+  - Textarea: Notes (optionnel)
+  - Bouton: Enregistrer réception
+  - Info: Vendeur assigné (affiché automatiquement)
 
-pour s'enregistrer dans le systeme , si l'utilisateur precise qu'il est pdg il devra entrer un code qui le prouve , le code sera configurer en clair dans la base de donner par le developpeur
+#### 4. Mes Réceptions
+- **Header**: 
+  - Titre: Mes Réceptions
+  - Filtre: Date picker
+  - Indicateur: Nombre total
+- **Liste**:
+  - Carte par réception:
+    - Produit (nom + icône)
+    - Quantité
+    - Producteur
+    - Vendeur assigné
+    - Heure
+    - Badge: Verrouillée/Modifiable
+    - Badge sync: Synced/Pending/Conflict
+    - Action: Modifier (si non verrouillé)
+- **Formulaire Modification** (modal):
+  - Input: Quantité
+  - Textarea: Notes
+  - Boutons: Annuler / Sauvegarder
+
+#### 5. Enregistrer Retour
+- **Formulaire**:
+  - Select: Produit (recherche)
+  - Input: Quantité
+  - Select: Raison (périssable/abîmé/autre)
+  - Textarea: Description (optionnel)
+  - Info: Vendeur concerné (auto)
+  - Bouton: Enregistrer retour
+
+#### 6. Mes Retours
+- **Header**: 
+  - Titre: Mes Retours
+  - Filtre: Date picker
+  - Indicateur: Nombre total
+- **Liste**:
+  - Carte par retour:
+    - Produit (nom + icône)
+    - Quantité
+    - Raison
+    - Vendeur concerné
+    - Heure
+    - Badge: Verrouillé/Modifiable
+    - Badge sync
+    - Action: Modifier (si non verrouillé)
+
+---
+
+### Écrans Vendeur
+
+#### 7. Dashboard Vendeur
+- **Header**: 
+  - Titre: Mes Produits Reçus
+  - Date du jour
+  - Indicateur sync
+- **Navigation Icônes**:
+  - Inventaire
+  - Session caisse
+  - Visualiser réceptions
+  - Visualiser retours
+  - Mon flux
+- **Liste Produits Reçus** (du jour):
+  - Carte par produit:
+    - Nom + icône
+    - Quantité reçue
+    - Producteur
+    - Heure réception
+    - Badge sync
+
+#### 8. Mes Réceptions (Vendeur - Lecture Seule)
+- **Header**: 
+  - Titre: Réceptions pour moi
+  - Filtre: Date picker
+  - Indicateur: Quantité totale
+- **Liste**:
+  - Carte par réception:
+    - Produit (nom + icône)
+    - Quantité
+    - Producteur
+    - Pointeur
+    - Heure
+    - Note: Lecture seule
+
+#### 9. Mes Retours (Vendeur - Lecture Seule)
+- **Header**: 
+  - Titre: Retours me concernant
+  - Filtre: Date picker
+  - Indicateur: Quantité totale
+- **Liste**:
+  - Carte par retour:
+    - Produit (nom + icône)
+    - Quantité
+    - Raison
+    - Pointeur
+    - Heure
+    - Description
+
+#### 10. Créer Inventaire
+- **Étape 1: Vendeur Sortant**:
+  - Info: Vous êtes le vendeur sortant
+  - Select: Vendeur entrant (même catégorie)
+  - Liste produits avec input quantité restante
+  - Bouton: Suivant
+
+- **Étape 2: Validation Double**:
+  - Résumé des quantités
+  - Input: PIN vendeur sortant
+  - Input: PIN vendeur entrant
+  - Bouton: Valider inventaire
+  - Info: Vous serez automatiquement déconnecté
+
+- **Confirmation**:
+  - Message succès
+  - Info: Le vendeur entrant est maintenant actif
+  - Auto-déconnexion après 3 secondes
+
+#### 11. Ouvrir Session de Vente
+- **Formulaire**:
+  - Info: Catégorie (auto selon rôle)
+  - Input: Fond de vente (XAF)
+  - Input: Orange Money initial (XAF, défaut 0)
+  - Input: MTN Money initial (XAF, défaut 0)
+  - Bouton: Ouvrir session
+- **Vérifications**:
+  - Aucune session déjà ouverte
+  - Synchronisation si en ligne
+
+#### 12. Session Active
+- **Header**: 
+  - Titre: Session en cours
+  - Durée écoulée
+  - Date/heure ouverture
+- **Infos Session**:
+  - Fond de vente
+  - Orange Money initial
+  - MTN Money initial
+- **Aperçu Ventes** (temps réel):
+  - Bouton: Actualiser
+  - Ventes totales estimées
+  - Liste par produit:
+    - Nom produit
+    - Stock initial
+    - Entrées
+    - Retours
+    - Stock actuel
+    - Quantité vendue (calculée)
+    - Montant vendu
+- **Info**:
+  - "Seul le PDG peut fermer cette session"
+  - Badge: Session ouverte
+
+#### 13. Mon Flux
+- **Header**: 
+  - Titre: Mon Flux de Produits
+  - Filtre: Date picker
+  - Période: Affichage heures ouverture/fermeture
+- **Tableau Flux**:
+  - Colonnes:
+    - Produit
+    - Trouvé (stock initial)
+    - Reçu
+    - Retourné
+    - Restant (stock final)
+    - Vendu (calculé)
+    - Valeur (XAF)
+  - Total général en bas
+- **Bouton**: Export/Partage (si nécessaire)
+
+#### 14. Historique Sessions
+- **Header**: 
+  - Titre: Mes Sessions
+  - Filtres: 
+    - Statut (toutes/ouvertes/fermées)
+    - Période (date début/fin)
+- **Liste**:
+  - Carte par session:
+    - Date ouverture
+    - Date fermeture (si fermée)
+    - Fond de vente
+    - Ventes totales
+    - Montant versé (si fermée)
+    - Manquant (si fermée)
+    - Badge: Ouverte/Fermée
+    - Action: Voir détails
+
+#### 15. Détails Session
+- **Infos générales**:
+  - Dates ouverture/fermeture
+  - Durée
+  - Fond de vente
+  - Orange/MTN initial et final
+  - Ventes totales
+  - Montant versé
+  - Manquant
+- **Détails par produit**:
+  - Tableau avec toutes les colonnes
+  - Stock initial/entrées/retours/stock final
+  - Quantité vendue / Montant
+
+---
+
+## 🎨 Design & UX
+
+### Palette de Couleurs (Thème Pain Doré)
+```
+Primary: #D4A574 (doré pain)
+Secondary: #8B6F47 (brun pain)
+Accent: #F4E5D3 (crème)
+Success: #4CAF50 (vert)
+Warning: #FF9800 (orange)
+Error: #F44336 (rouge)
+Background: #FAFAFA (gris très clair)
+Surface: #FFFFFF (blanc)
+Text Primary: #212121 (noir)
+Text Secondary: #757575 (gris)
+```
+
+### Indicateurs de Statut
+- **Connexion réseau**:
+  - 🟢 Connecté (coin supérieur droit)
+  - 🔴 Déconnecté
+  - 🟡 Synchronisation en cours
+
+- **État de synchronisation**:
+  - ✅ Synced (badge vert)
+  - ⏳ Pending (badge orange)
+  - ⚠️ Conflict (badge rouge)
+
+### Composants Réutilisables
+- **ProductCard**: Affichage produit avec icône catégorie
+- **SyncBadge**: Badge état synchronisation
+- **ConnectionIndicator**: Point couleur connexion
+- **DateFilter**: Sélecteur de date stylisé
+- **NumericInput**: Input numérique avec +/- buttons
+- **PINInput**: Input 6 chiffres masqué
+- **SearchableSelect**: Select avec recherche
+- **ConfirmationModal**: Modal de confirmation actions
+- **LoadingOverlay**: Overlay pendant sync
+- **EmptyState**: État vide avec illustration
+
+### Animations
+- Transitions fluides entre écrans
+- Feedback visuel sur actions (ripple effect)
+- Skeleton loaders pendant chargement
+- Success animations sur validations
+- Pull-to-refresh sur listes
+
+---
+
+## 📦 Livrables
+
+1. **Code source React Native (Expo)**:
+   - Structure complète du projet
+   - Tous les composants et écrans
+   - Services de synchronisation
+   - Gestion SQLite
+   - Configuration navigation
 
 
 
-dans le dashboard du pointeur je veux que ce soit directement une interface lui permettant d'enregistrer des reception
-dans le dashboard du vendeur je veux que ce soit directement la liste des produits qu'il a recu (obtenu des entreer du pointeur)
+creer moi toute l'applicatoin mobile en te rappelant a chaque fois que tout se passe offline d'abord et il y'a juste un excellent service de synchronisation qui gere le reste : (la premiere inscription neccessite vraiment l'acces au serveur et la premiere connexion aussi mais apres ce serait mieux que la connexion hors ligne a une durrer de 15J avant d'expierer si la session n'est plus active (donc 15h d'inactiviter))
 
-l'application doit etre de rang International , de niveau Legende et de Performance maximale
+de plus au niveau des vendeurs , c'est en utilisant le code pin du vendeurs entrant que tu pourra directement switcher vers son compte(login) apres l'inventaire direct
 
-les palettes de couleur doivent etre coherente et le theme principale est tout simplement la couleur doreer du pain
+pour faire cela de faxon modulaire on va commencer par tous les fichiers de configuration , de base de donner , de models s'il y'en a , le service de synchronisation ,le fichier des routes, toute l'authentification et enfin tout le reste
 
-l'architecture a utiliser est la suivante
+a la fin tu creera un fichier contenant l'architecture utiliser et expliquant comment ajouter des fonctionnaliter dans l'app
+tu creeas aussi un fichier contenant toute les commandes pour initialiser le projet et creeer l'architecture(arborescence de fichier (vides))
 
+tout doit etre fonctionnel a la fin: code juste ne prends pas en compte les limitations d'environnement je vais tester en local
 
-easygestbp-front-end/
-│
-├── src/
-│   ├── api/
-│   │   ├── client.js                    # Configuration Axios + intercepteurs
-│   │   ├── endpoints.js                 # Toutes les URLs des endpoints
-│   │   └── services/
-│   │       ├── authService.js           # Authentification
-│   │       ├── productService.js        # Produits
-│   │       ├── receptionService.js      # Réceptions
-│   │       ├── retourService.js         # Retours
-│   │       ├── inventaireService.js     # Inventaires
-│   │       ├── sessionService.js        # Sessions de vente
-│   │       ├── fluxService.js           # Flux de produits
-│   │       └── userService.js           # Gestion utilisateurs
-│   │
-│   ├── store/
-│   │   ├── database.js                  # Configuration SQLite
-│   │   ├── syncService.js               # Synchronisation offline/online
-│   │   └── models/
-│   │       ├── Product.js
-│   │       ├── Reception.js
-│   │       ├── Retour.js
-│   │       ├── Inventaire.js
-│   │       └── Session.js
-│   │
-│   ├── contexts/
-│   │   ├── AuthContext.js               # État authentification globale
-│   │   ├── NetworkContext.js            # État réseau (online/offline)
-│   │   └── SyncContext.js               # État synchronisation
-│   │
-│   ├── screens/
-│   │   ├── auth/
-│   │   │   ├── LoginScreen.js
-│   │   │   └── RegisterScreen.js
-│   │   │
-│   │   ├── pointeur/
-│   │   │   ├── DashboardPointeurScreen.js    # Interface réception directe
-│   │   │   ├── ReceptionFormScreen.js
-│   │   │   ├── RetourFormScreen.js
-│   │   │   └── HistoriqueScreen.js
-│   │   │
-│   │   ├── vendeur/
-│   │   │   ├── DashboardVendeurScreen.js     # Liste produits reçus
-│   │   │   ├── InventaireScreen.js
-│   │   │   ├── ValidationInventaireScreen.js
-│   │   │   ├── SessionVenteScreen.js
-│   │   │   └── MesReceptionsScreen.js
-│   │   │
-│   │   └── pdg/
-│   │       ├── DashboardPDGScreen.js
-│   │       ├── FluxProduitsScreen.js         # Tableau flux complet
-│   │       ├── GestionUsersScreen.js
-│   │       ├── GestionProduitsScreen.js
-│   │       ├── FermetureSessionScreen.js
-│   │       └── ModificationScreen.js
-│   │
-│   ├── components/
-│   │   ├── common/
-│   │   │   ├── Button.js
-│   │   │   ├── Input.js
-│   │   │   ├── Card.js
-│   │   │   ├── Modal.js
-│   │   │   ├── LoadingSpinner.js
-│   │   │   ├── ErrorBoundary.js
-│   │   │   └── OfflineIndicator.js
-│   │   │
-│   │   ├── forms/
-│   │   │   ├── ReceptionForm.js
-│   │   │   ├── RetourForm.js
-│   │   │   ├── InventaireForm.js
-│   │   │   ├── ProductForm.js
-│   │   │   └── UserForm.js
-│   │   │
-│   │   └── lists/
-│   │       ├── ProductList.js
-│   │       ├── ReceptionList.js
-│   │       ├── RetourList.js
-│   │       ├── UserList.js
-│   │       └── FluxTable.js
-│   │
-│   ├── navigation/
-│   │   ├── AppNavigator.js              # Navigation principale
-│   │   ├── PointeurNavigator.js
-│   │   ├── VendeurNavigator.js
-│   │   └── PDGNavigator.js
-│   │
-│   ├── utils/
-│   │   ├── constants.js                 # Constantes globales
-│   │   ├── validators.js                # Validation formulaires
-│   │   ├── formatters.js                # Formatage dates/montants
-│   │   ├── calculations.js              # Calculs (manquant, vendu, etc.)
-│   │   └── permissions.js               # Gestion permissions par rôle
-│   │
-│   ├── hooks/
-│   │   ├── useAuth.js
-│   │   ├── useNetwork.js
-│   │   ├── useSync.js
-│   │   ├── useProducts.js
-│   │   ├── useReceptions.js
-│   │   └── useInventaire.js
-│   │
-│   ├── theme/
-│   │   ├── colors.js                    # Palette dorée/pain
-│   │   ├── typography.js
-│   │   └── spacing.js
-│   │
-│   ├── config/
-│   │   ├── app.config.js                # Config générale
-│   │   └── api.config.js                # Config API (URL serveur)
-│   │
-│   └── App.js                           # Point d'entrée
-│
-├── electron/                            # Pour version PC (Electron)
-│   ├── main.js
-│   ├── preload.js
-│   └── package.json
-│
-├── android/                             # Configuration Android
-├── ios/                                 # Configuration iOS (optionnel)
-│
-├── assets/
-│   ├── images/
-│   ├── icons/
-│   └── fonts/
-│
-├── app.json                             # Config Expo
-├── package.json
-├── babel.config.js
-└── README.md
-
-code moi tout le Frontend comme un chef et a la fin tu vas creer un fichier bash contenant les commandes a executer pour installer le projet et initaliser tte les dependances
-
+ code directement (ne fait pas de plan commence directement  a coder) 
