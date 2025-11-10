@@ -531,9 +531,9 @@ private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additi
         // OU Condition 2: updated_at > last_sync + 5 minutes
         ->orWhere(function($sq) use ($lastSync) {
             if ($lastSync) {
-                // Ajoute 5 minutes à last_sync
-                $lastSyncPlusFiveMin = date('Y-m-d H:i:s', strtotime($lastSync . ' +5 minutes'));
-                $sq->where('updated_at', '>', $lastSyncPlusFiveMin);
+                // Ajoute 1 minutes à last_sync
+                $lastSyncPlusOneMin = date('Y-m-d H:i:s', strtotime($lastSync . ' +1 minutes'));
+                $sq->where('updated_at', '>', $lastSyncPlusOneMin);
             }
         });
     });
