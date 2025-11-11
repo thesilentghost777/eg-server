@@ -16,7 +16,10 @@ class SessionVenteService
     /**
      * Fermer une session de vente avec calcul automatique des ventes
      */
-   public function fermerSession($sessionId, array $data, $pdgId)
+/**
+ * Fermer une session de vente
+ */
+public function fermerSession($sessionId, array $data, $pdgId)
 {
     DB::beginTransaction();
     try {
@@ -35,8 +38,13 @@ class SessionVenteService
             throw new \Exception("Cette session est déjà fermée");
         }
 
-        // Calculer les ventes totales automatiquement
+        // Calculer les ventes totales automatiquement avec la nouvelle logique
         $ventesTotales = $this->calculerVentesTotales($session);
+        
+        if ($ventesTotales === null) {
+            throw new \Exception("Impossible de calculer les ventes: inventaires incohérents ou manquants");
+        }
+        
         Log::info("Ventes totales calculées", [
             'session_id' => $sessionId,
             'ventes_totales' => $ventesTotales
@@ -56,6 +64,7 @@ class SessionVenteService
             'mtn_final' => $data['mtn_money_final']
         ]);
 
+        // Formule: Manquant = (Ventes + Fond) - (Versé + Diff OM + Diff MTN)
         $manquant = ($ventesTotales + $session->fond_vente) -
             ($data['montant_verse'] + $diffOM + $diffMTN);
         
@@ -76,6 +85,7 @@ class SessionVenteService
             'manquant' => $manquant,
             'statut' => 'fermee',
             'fermee_par' => $pdgId,
+            'valeur_vente' => $ventesTotales,
             'date_fermeture' => now(),
         ]);
 
@@ -104,29 +114,65 @@ class SessionVenteService
     }
 }
 
-    /**
-     * Calculer les ventes totales de la session
-     * Formule: Ventes = (Stock initial + Entrées - Retours - Stock final) × Prix
-     */
-    public function calculerVentesTotales(SessionVente $session)
+/**
+ * Calculer les ventes totales de la session
+ * Formule: Ventes = (Stock initial + Entrées - Retours - Stock final) × Prix
+ * Retourne null si les inventaires sont incohérents
+ */
+public function calculerVentesTotales(SessionVente $session)
 {
     $vendeurId = $session->vendeur_id;
     $categorie = $session->categorie;
-    $dateDebut = Carbon::parse($session->date_ouverture)->startOfDay();
-    $dateFin = now()->endOfDay();
+    $dateSession = Carbon::parse($session->date_ouverture);
 
-    \Log::info('=== DÉBUT CALCUL VENTES TOTALES ===', [
+    Log::info('=== DÉBUT CALCUL VENTES TOTALES ===', [
         'session_id' => $session->id,
         'vendeur_id' => $vendeurId,
         'categorie' => $categorie,
+        'date_session' => $dateSession->toDateString(),
+    ]);
+
+    // Récupérer l'inventaire d'entrée (jour demandé OU veille)
+    $inventaireDebut = $this->trouverInventaireDebut($vendeurId, $dateSession);
+    
+    // Récupérer l'inventaire de sortie (jour demandé OU lendemain) avec validation
+    $inventaireFin = $inventaireDebut 
+        ? $this->trouverInventaireFin($vendeurId, $dateSession, $inventaireDebut)
+        : null;
+    
+    if (!$inventaireDebut || !$inventaireFin) {
+        Log::warning('Inventaires incomplets pour le calcul', [
+            'has_debut' => $inventaireDebut ? true : false,
+            'has_fin' => $inventaireFin ? true : false
+        ]);
+        return null;
+    }
+
+    // Définir la plage opérationnelle
+    $dateDebut = Carbon::parse($inventaireDebut->date_inventaire)->startOfDay();
+    $dateFin = Carbon::parse($inventaireFin->date_inventaire)->endOfDay();
+
+    // Vérifier que la période ne dépasse pas 24h
+    $dureeHeures = $dateDebut->diffInHours($dateFin);
+    if ($dureeHeures > 24) {
+        Log::error('Période opérationnelle dépasse 24h - Inventaires incohérents', [
+            'duree_heures' => $dureeHeures,
+            'date_debut' => $dateDebut->toDateTimeString(),
+            'date_fin' => $dateFin->toDateTimeString()
+        ]);
+        return null;
+    }
+
+    Log::info('Plage opérationnelle validée', [
         'date_debut' => $dateDebut->toDateTimeString(),
         'date_fin' => $dateFin->toDateTimeString(),
+        'duree_heures' => $dureeHeures
     ]);
 
     // Récupérer tous les produits de la catégorie
-    $produits = Produit::where('categorie', $categorie)->get();
+    $produits = Produit::where('categorie', $categorie)->where('actif', true)->get();
     
-    \Log::info('Produits trouvés', [
+    Log::info('Produits trouvés', [
         'nombre_produits' => $produits->count(),
         'produits' => $produits->pluck('nom', 'id')->toArray()
     ]);
@@ -134,32 +180,50 @@ class SessionVenteService
     $ventesTotales = 0;
 
     foreach ($produits as $produit) {
-        \Log::info("--- Traitement produit: {$produit->nom} (ID: {$produit->id}) ---");
+        Log::info("--- Traitement produit: {$produit->nom} (ID: {$produit->id}) ---");
 
-        // 1. STOCK INITIAL (dernier inventaire validé avant/lors de l'ouverture)
-        $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut);
-        \Log::info('Stock initial', [
+        // 1. STOCK INITIAL (depuis inventaire début)
+        $stockInitial = 0;
+        if ($inventaireDebut) {
+            $detail = $inventaireDebut->details->where('produit_id', $produit->id)->first();
+            $stockInitial = $detail ? $detail->quantite_restante : 0;
+        }
+        
+        Log::info('Stock initial', [
             'produit' => $produit->nom,
             'quantite' => $stockInitial
         ]);
 
-        // 2. ENTRÉES (réceptions du pointeur pendant la session)
-        $entrees = $this->getEntrees($vendeurId, $produit->id, $dateDebut, $dateFin);
-        \Log::info('Entrées', [
+        // 2. ENTRÉES (réceptions dans la plage)
+        $entrees = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
+            ->where('produit_id', $produit->id)
+            ->whereBetween('date_reception', [$dateDebut, $dateFin])
+            ->sum('quantite');
+            
+        Log::info('Entrées', [
             'produit' => $produit->nom,
             'quantite' => $entrees
         ]);
 
-        // 3. RETOURS (produits retournés pendant la session)
-        $retours = $this->getRetours($vendeurId, $produit->id, $dateDebut, $dateFin);
-        \Log::info('Retours', [
+        // 3. RETOURS (dans la plage)
+        $retours = RetourProduit::where('vendeur_id', $vendeurId)
+            ->where('produit_id', $produit->id)
+            ->whereBetween('date_retour', [$dateDebut, $dateFin])
+            ->sum('quantite');
+            
+        Log::info('Retours', [
             'produit' => $produit->nom,
             'quantite' => $retours
         ]);
 
-        // 4. STOCK FINAL (inventaire de sortie si existe, sinon 0)
-        $stockFinal = $this->getStockFinal($vendeurId, $produit->id,$dateDebut, $dateFin);
-        \Log::info('Stock final', [
+        // 4. STOCK FINAL (depuis inventaire fin)
+        $stockFinal = 0;
+        if ($inventaireFin) {
+            $detail = $inventaireFin->details->where('produit_id', $produit->id)->first();
+            $stockFinal = $detail ? $detail->quantite_restante : 0;
+        }
+        
+        Log::info('Stock final', [
             'produit' => $produit->nom,
             'quantite' => $stockFinal
         ]);
@@ -167,7 +231,7 @@ class SessionVenteService
         // Calcul des quantités vendues
         $quantiteVendue = $stockInitial + $entrees - $retours - $stockFinal;
         
-        \Log::info('Calcul quantité vendue', [
+        Log::info('Calcul quantité vendue', [
             'produit' => $produit->nom,
             'formule' => "$stockInitial + $entrees - $retours - $stockFinal",
             'quantite_brute' => $quantiteVendue
@@ -175,7 +239,7 @@ class SessionVenteService
 
         // Sécurité: pas de ventes négatives
         if ($quantiteVendue < 0) {
-            \Log::warning('Quantité vendue négative détectée', [
+            Log::warning('Quantité vendue négative détectée', [
                 'produit' => $produit->nom,
                 'quantite_negative' => $quantiteVendue,
                 'action' => 'Remise à 0'
@@ -187,7 +251,7 @@ class SessionVenteService
         $montantProduit = $quantiteVendue * $produit->prix;
         $ventesTotales += $montantProduit;
 
-        \Log::info('Montant calculé pour le produit', [
+        Log::info('Montant calculé pour le produit', [
             'produit' => $produit->nom,
             'quantite_vendue' => $quantiteVendue,
             'prix_unitaire' => $produit->prix,
@@ -198,7 +262,7 @@ class SessionVenteService
 
     $ventesTotalesFinales = round($ventesTotales, 2);
 
-    \Log::info('=== FIN CALCUL VENTES TOTALES ===', [
+    Log::info('=== FIN CALCUL VENTES TOTALES ===', [
         'session_id' => $session->id,
         'ventes_totales_brutes' => $ventesTotales,
         'ventes_totales_arrondies' => $ventesTotalesFinales
@@ -207,30 +271,201 @@ class SessionVenteService
     return $ventesTotalesFinales;
 }
 
+// ========== MÉTHODES PRIVÉES AVEC VALIDATION ==========
+
+/**
+ * Trouver l'inventaire d'entrée (vendeur entrant)
+ * Cherche sur la date demandée (J) ou la veille (J-1)
+ * S'assure que l'inventaire de la veille n'a pas été fermé la veille
+ */
+private function trouverInventaireDebut($vendeurId, Carbon $date)
+{
+    Log::info("Recherche inventaire début", [
+        'vendeur_id' => $vendeurId,
+        'date' => $date->toDateString()
+    ]);
+
+    // Chercher le jour même d'abord
+    $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $date)
+        ->with('details')
+        ->first();
+
+    if ($inventaire) {
+        Log::info("Inventaire début trouvé le jour même", [
+            'inventaire_id' => $inventaire->id,
+            'date' => $inventaire->date_inventaire
+        ]);
+        return $inventaire;
+    }
+
+    // Sinon chercher la veille
+    $veille = $date->copy()->subDay();
+    $inventaireVeille = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $veille)
+        ->with('details')
+        ->first();
+
+    if (!$inventaireVeille) {
+        Log::info("Aucun inventaire début trouvé (jour ou veille)");
+        return null;
+    }
+
+    // Vérifier que cet inventaire n'a pas été fermé la veille
+    // (c'est-à-dire qu'il n'existe pas d'inventaire sortant pour ce vendeur sur J-1)
+    $inventaireFermeVeille = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $veille)
+        ->exists();
+
+    if ($inventaireFermeVeille) {
+        Log::info("L'inventaire de J-1 a déjà été fermé la veille - Non valide pour J", [
+            'date_veille' => $veille->toDateString()
+        ]);
+        return null;
+    }
+
+    Log::info("Inventaire début trouvé la veille et non fermé - Valide pour J", [
+        'inventaire_id' => $inventaireVeille->id,
+        'date' => $inventaireVeille->date_inventaire
+    ]);
+
+    return $inventaireVeille;
+}
+
+/**
+ * Trouver l'inventaire de sortie (vendeur sortant)
+ * Cherche sur la date demandée (J) ou le lendemain (J+1)
+ * S'assure que l'inventaire du lendemain n'a pas été ouvert le lendemain
+ * Vérifie aussi la cohérence avec l'inventaire de début
+ */
+private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut)
+{
+    Log::info("Recherche inventaire fin", [
+        'vendeur_id' => $vendeurId,
+        'date' => $date->toDateString()
+    ]);
+
+    // Chercher le jour même d'abord
+    $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $date)
+        ->with('details')
+        ->first();
+
+    if ($inventaire) {
+        // Vérifier la cohérence: l'inventaire de fin sur J doit correspondre à l'inventaire de début
+        $dateDebutInventaire = Carbon::parse($inventaireDebut->date_inventaire);
+        $dateFinInventaire = Carbon::parse($inventaire->date_inventaire);
+        
+        // Ils doivent être sur la même date
+        if ($dateDebutInventaire->isSameDay($dateFinInventaire)) {
+            Log::info("Inventaire fin trouvé le jour même - Cohérent avec l'inventaire début", [
+                'inventaire_id' => $inventaire->id,
+                'date' => $inventaire->date_inventaire
+            ]);
+            return $inventaire;
+        } else {
+            Log::warning("Inventaire fin trouvé sur J mais incohérent avec l'inventaire début", [
+                'date_debut' => $dateDebutInventaire->toDateString(),
+                'date_fin' => $dateFinInventaire->toDateString()
+            ]);
+        }
+    }
+
+    // Sinon chercher le lendemain
+    $lendemain = $date->copy()->addDay();
+    $inventaireLendemain = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $lendemain)
+        ->with('details')
+        ->first();
+
+    if (!$inventaireLendemain) {
+        Log::info("Aucun inventaire fin trouvé (jour ou lendemain)");
+        return null;
+    }
+
+    // Vérifier que cet inventaire n'a pas été ouvert le lendemain
+    // (c'est-à-dire qu'il n'existe pas d'inventaire entrant pour ce vendeur sur J+1)
+    $inventaireOuvertLendemain = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $lendemain)
+        ->exists();
+
+    if ($inventaireOuvertLendemain) {
+        Log::info("L'inventaire de J+1 a déjà été ouvert le lendemain - Non valide pour J", [
+            'date_lendemain' => $lendemain->toDateString()
+        ]);
+        return null;
+    }
+
+    // Vérifier la cohérence avec l'inventaire de début
+    $dateDebutInventaire = Carbon::parse($inventaireDebut->date_inventaire);
+    $dateFinInventaire = Carbon::parse($inventaireLendemain->date_inventaire);
+    
+    // L'inventaire de début doit être J-1 ou J, et l'inventaire de fin J+1
+    // La différence doit être <= 1 jour
+    $diffJours = $dateDebutInventaire->diffInDays($dateFinInventaire);
+    
+    if ($diffJours > 1) {
+        Log::warning("Inventaire fin sur J+1 mais trop éloigné de l'inventaire début", [
+            'diff_jours' => $diffJours,
+            'date_debut' => $dateDebutInventaire->toDateString(),
+            'date_fin' => $dateFinInventaire->toDateString()
+        ]);
+        return null;
+    }
+
+    // Vérifier que l'inventaire de début est bien J-1 ou J si on utilise un inventaire de fin sur J+1
+    if (!$dateDebutInventaire->isSameDay($date->copy()->subDay()) && !$dateDebutInventaire->isSameDay($date)) {
+        Log::warning("Inventaire fin sur J+1 mais inventaire début non cohérent", [
+            'date_debut' => $dateDebutInventaire->toDateString(),
+            'date_attendue' => $date->toDateString() . ' ou ' . $date->copy()->subDay()->toDateString()
+        ]);
+        return null;
+    }
+
+    Log::info("Inventaire fin trouvé le lendemain et non ouvert - Valide pour J", [
+        'inventaire_id' => $inventaireLendemain->id,
+        'date' => $inventaireLendemain->date_inventaire
+    ]);
+
+    return $inventaireLendemain;
+}
+
     /**
      * Récupérer le stock initial du dernier inventaire validé
      */
-    public function getStockInitial($vendeurId, $produitId, $dateDebut)
-    {
-        // Chercher le dernier inventaire où le vendeur est ENTRANT et validé
-        // avant ou à la date d'ouverture de session
-        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
-            ->where('valide_entrant', true)
-            ->where('date_inventaire', '<=', $dateDebut)
-            ->orderBy('date_inventaire', 'desc')
-            ->first();
-
-        if (!$inventaire) {
-            return 0;
-        }
-
-        $detail = DB::table('inventaire_details')
-            ->where('inventaire_id', $inventaire->id)
-            ->where('produit_id', $produitId)
-            ->first();
-
-        return $detail ? $detail->quantite_restante : 0;
+  public function getStockInitial($vendeurId, $produitId, $dateDebut, $dateFin)
+{
+    // Correction : Utiliser un tableau pour le contexte
+    Log::info("DDDDDDDDDDDDDDDDD\ndate debut", ['dateDebut' => $dateDebut]);
+    
+    // Chercher le dernier inventaire où le vendeur est ENTRANT et validé
+    // avant ou à la date d'ouverture de session
+    $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereBetween('date_inventaire', [$dateDebut, $dateFin])
+        ->orderBy('date_inventaire', 'desc')
+        ->first();
+        
+    if (!$inventaire) {
+        Log::info("XXXXXXXXXXXXXXXXXXX\nAucun inventaire trouvé ou le vendeur est entrant");
+        return 0;
     }
+    
+    $detail = DB::table('inventaire_details')
+        ->where('inventaire_id', $inventaire->id)
+        ->where('produit_id', $produitId)
+        ->first();
+        
+    Log::info("XXXXXXXXXXXXXXXXXXX\nInventaire trouvé avec pour détail", (array)$detail);
+    
+    return $detail ? $detail->quantite_restante : 0;
+}
 
     /**
      * Récupérer les entrées (réceptions) pendant la session
@@ -310,7 +545,7 @@ class SessionVenteService
         $details = [];
 
         foreach ($produits as $produit) {
-            $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut);
+            $stockInitial = $this->getStockInitial($vendeurId, $produit->id, $dateDebut, $dateFin);
             $entrees = $this->getEntrees($vendeurId, $produit->id, $dateDebut, $dateFin);
             $retours = $this->getRetours($vendeurId, $produit->id, $dateDebut, $dateFin);
             $stockFinal = $this->getStockFinal($vendeurId, $produit->id, $dateDebut, $dateFin);

@@ -63,7 +63,7 @@
                 </div>
             </a>
 
-            <a href="{{ route('pdg.sessions') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+            <a href="{{ route('sessions.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
                 <div class="flex items-center space-x-4">
                     <div class="bg-purple-100 w-14 h-14 rounded-xl flex items-center justify-center">
                         <i class="fas fa-calendar-alt text-2xl text-purple-600"></i>
@@ -87,18 +87,7 @@
                 </div>
             </a>
 
-            <a href="{{ route('pdg.statistiques') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
-                <div class="flex items-center space-x-4">
-                    <div class="bg-red-100 w-14 h-14 rounded-xl flex items-center justify-center">
-                        <i class="fas fa-chart-pie text-2xl text-red-600"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Statistiques' : 'Statistics' }}</h3>
-                        <p class="text-gray-500 text-sm">{{ $isFrench ? 'Analyses détaillées' : 'Detailed analysis' }}</p>
-                    </div>
-                </div>
-            </a>
-
+           
             <a href="{{ route('users.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
                 <div class="flex items-center space-x-4">
                     <div class="bg-amber-100 w-14 h-14 rounded-xl flex items-center justify-center">

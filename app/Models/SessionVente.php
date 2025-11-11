@@ -21,6 +21,7 @@ class SessionVente extends Model
         'orange_money_final',
         'mtn_money_final',
         'manquant',
+        'valeur_vente',
         'statut',
         'fermee_par',
         'date_ouverture',

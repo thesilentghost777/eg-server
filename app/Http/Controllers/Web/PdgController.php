@@ -32,50 +32,107 @@ class PdgController extends Controller
     }
 
     public function receptions(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'pointeur_id' => 'nullable|exists:users,id',
-                'producteur_id' => 'nullable|exists:users,id',
-                'vendeur_id' => 'nullable|exists:users,id',
-                'produit_id' => 'nullable|exists:produits,id',
-                'date_debut' => 'nullable|date',
-                'date_fin' => 'nullable|date',
-                'verrou' => 'nullable|boolean',
-            ]);
+{
+    try {
+        $validated = $request->validate([
+            'pointeur_id' => 'nullable|exists:users,id',
+            'producteur_id' => 'nullable|exists:users,id',
+            'vendeur_id' => 'nullable|exists:users,id',
+            'produit_id' => 'nullable|exists:produits,id',
+            'date_debut' => 'nullable|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_debut',
+            'verrou' => 'nullable|in:0,1',
+        ]);
 
-            $query = \App\Models\ReceptionPointeur::with(['pointeur', 'producteur', 'produit', 'vendeurAssigne']);
+        // Construction de la requête avec eager loading
+        $query = \App\Models\ReceptionPointeur::with([
+            'pointeur:id,name',
+            'producteur:id,name',
+            'produit:id,nom,categorie',
+            'vendeurAssigne:id,name'
+        ]);
 
-            if (isset($validated['pointeur_id'])) {
-                $query->where('pointeur_id', $validated['pointeur_id']);
-            }
-            if (isset($validated['producteur_id'])) {
-                $query->where('producteur_id', $validated['producteur_id']);
-            }
-            if (isset($validated['vendeur_id'])) {
-                $query->where('vendeur_assigne_id', $validated['vendeur_id']);
-            }
-            if (isset($validated['produit_id'])) {
-                $query->where('produit_id', $validated['produit_id']);
-            }
-            if (isset($validated['date_debut'])) {
-                $query->whereDate('date_reception', '>=', $validated['date_debut']);
-            }
-            if (isset($validated['date_fin'])) {
-                $query->whereDate('date_reception', '<=', $validated['date_fin']);
-            }
-            if (isset($validated['verrou'])) {
-                $query->where('verrou', $validated['verrou']);
-            }
-
-            $receptions = $query->orderBy('date_reception', 'desc')->paginate(20);
-            
-            return view('pdg.receptions', compact('receptions'));
-        } catch (\Exception $e) {
-            Log::error('Erreur filtrage réceptions', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Erreur lors du filtrage des réceptions');
+        // Application des filtres
+        if (isset($validated['pointeur_id'])) {
+            $query->where('pointeur_id', $validated['pointeur_id']);
         }
+
+        if (isset($validated['producteur_id'])) {
+            $query->where('producteur_id', $validated['producteur_id']);
+        }
+
+        if (isset($validated['vendeur_id'])) {
+            $query->where('vendeur_assigne_id', $validated['vendeur_id']);
+        }
+
+        if (isset($validated['produit_id'])) {
+            $query->where('produit_id', $validated['produit_id']);
+        }
+
+        if (isset($validated['date_debut'])) {
+            $query->whereDate('date_reception', '>=', $validated['date_debut']);
+        }
+
+        if (isset($validated['date_fin'])) {
+            $query->whereDate('date_reception', '<=', $validated['date_fin']);
+        }
+
+        if (isset($validated['verrou'])) {
+            $query->where('verrou', (bool)$validated['verrou']);
+        }
+
+        // Récupération des réceptions avec pagination
+        $receptions = $query->orderBy('date_reception', 'desc')->paginate(20);
+
+        // Préservation des paramètres de filtre dans la pagination
+        $receptions->appends($request->all());
+
+        // Récupération des données pour les filtres
+        $produits = \App\Models\Produit::where('actif', true)
+            ->orderBy('categorie')
+            ->orderBy('nom')
+            ->get();
+
+        $pointeurs = \App\Models\User::where('role', 'pointeur')
+            ->where('actif', true)
+            ->orderBy('name')
+            ->get();
+
+        $producteurs = \App\Models\User::where('role', 'producteur')
+            ->where('actif', true)
+            ->orderBy('name')
+            ->get();
+
+        $vendeurs = \App\Models\User::where('role', 'vendeur')
+            ->where('actif', true)
+            ->orderBy('name')
+            ->get();
+
+        // Déterminer la langue
+        $isFrench = app()->getLocale() === 'fr' || session('langue') === 'fr';
+
+        return view('pdg.receptions', compact(
+            'receptions',
+            'produits',
+            'pointeurs',
+            'producteurs',
+            'vendeurs',
+            'isFrench'
+        ));
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return back()
+            ->withErrors($e->errors())
+            ->withInput()
+            ->with('error', 'Erreur de validation des filtres');
+    } catch (\Exception $e) {
+        Log::error('Erreur filtrage réceptions', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->with('error', 'Erreur lors du filtrage des réceptions');
     }
+}
 
     public function inventaires(Request $request)
     {

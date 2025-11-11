@@ -140,6 +140,16 @@
         @endif
 
         <!-- Statistiques -->
+        @php
+            $sessionsCollection = is_array($sessions) ? collect($sessions) : $sessions;
+            $totalSessions = $sessionsCollection->count();
+            $sessionsFermees = $sessionsCollection->where('statut', 'fermee')->count();
+            $sessionsOuvertes = $sessionsCollection->where('statut', 'ouverte')->count();
+            $totalVerse = $sessionsCollection->where('statut', 'fermee')->sum(function($s) {
+                return is_array($s) ? ($s['montant_verse'] ?? 0) : ($s->montant_verse ?? 0);
+            });
+        @endphp
+
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform duration-300">
                 <div class="flex items-center justify-between">
@@ -147,7 +157,7 @@
                         <p class="text-blue-100 text-sm font-medium mb-1">
                             {{ $isFrench ? 'Total Sessions' : 'Total Sessions' }}
                         </p>
-                        <p class="text-3xl sm:text-4xl font-bold">{{ $sessions->count() }}</p>
+                        <p class="text-3xl sm:text-4xl font-bold">{{ $totalSessions }}</p>
                     </div>
                     <div class="bg-white/20 p-4 rounded-xl">
                         <i class="fas fa-clipboard-list text-3xl"></i>
@@ -161,7 +171,7 @@
                         <p class="text-green-100 text-sm font-medium mb-1">
                             {{ $isFrench ? 'Sessions Fermées' : 'Closed Sessions' }}
                         </p>
-                        <p class="text-3xl sm:text-4xl font-bold">{{ $sessions->where('statut', 'fermee')->count() }}</p>
+                        <p class="text-3xl sm:text-4xl font-bold">{{ $sessionsFermees }}</p>
                     </div>
                     <div class="bg-white/20 p-4 rounded-xl">
                         <i class="fas fa-check-circle text-3xl"></i>
@@ -175,7 +185,7 @@
                         <p class="text-amber-100 text-sm font-medium mb-1">
                             {{ $isFrench ? 'Sessions Ouvertes' : 'Open Sessions' }}
                         </p>
-                        <p class="text-3xl sm:text-4xl font-bold">{{ $sessions->where('statut', 'ouverte')->count() }}</p>
+                        <p class="text-3xl sm:text-4xl font-bold">{{ $sessionsOuvertes }}</p>
                     </div>
                     <div class="bg-white/20 p-4 rounded-xl">
                         <i class="fas fa-door-open text-3xl"></i>
@@ -189,7 +199,7 @@
                         <p class="text-purple-100 text-sm font-medium mb-1">
                             {{ $isFrench ? 'Total Versé' : 'Total Paid' }}
                         </p>
-                        <p class="text-2xl sm:text-3xl font-bold">{{ number_format($sessions->where('statut', 'fermee')->sum('montant_verse'), 0, ',', ' ') }} <span class="text-lg">FCFA</span></p>
+                        <p class="text-2xl sm:text-3xl font-bold">{{ number_format($totalVerse, 0, ',', ' ') }} <span class="text-lg">FCFA</span></p>
                     </div>
                     <div class="bg-white/20 p-4 rounded-xl">
                         <i class="fas fa-coins text-3xl"></i>
@@ -216,50 +226,69 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-amber-100">
-                        @forelse($sessions as $session)
+                        @forelse($sessions as $index => $session)
+                            @php
+                                // Gérer à la fois les objets et les arrays
+                                $sessionData = is_array($session) ? $session : (array) $session;
+                                $sessionId = $sessionData['id'] ?? null;
+                                $vendeur = $sessionData['vendeur'] ?? null;
+                                $vendeurData = is_array($vendeur) ? $vendeur : (is_object($vendeur) ? (array) $vendeur : []);
+                                $categorie = $sessionData['categorie'] ?? '';
+                                $statut = $sessionData['statut'] ?? '';
+                                $dateOuverture = $sessionData['date_ouverture'] ?? null;
+                                $dateFermeture = $sessionData['date_fermeture'] ?? null;
+                                $totalVentes = $sessionData['total_ventes'] ?? 0;
+                                $nombreVentes = $sessionData['nombre_ventes'] ?? 0;
+                                $montantVerse = $sessionData['montant_verse'] ?? null;
+                                $ventes = $sessionData['ventes'] ?? [];
+                                if (is_object($ventes)) {
+                                    $ventes = $ventes->toArray();
+                                }
+                            @endphp
+                            
                             <tr class="hover:bg-amber-50 transition-colors duration-200">
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap">
-                                    <span class="text-xs sm:text-sm font-bold text-amber-700">#{{ $session->id }}</span>
+                                    <span class="text-xs sm:text-sm font-bold text-amber-700">#{{ $sessionId }}</span>
                                 </td>
                                 <td class="px-3 sm:px-6 py-4">
                                     <div class="flex items-center gap-2 sm:gap-3">
                                         <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                                            {{ strtoupper(substr($session->vendeur->name, 0, 2)) }}
+                                            {{ strtoupper(substr($vendeurData['name'] ?? 'N/A', 0, 2)) }}
                                         </div>
                                         <div class="min-w-0">
-                                            <p class="text-xs sm:text-sm font-semibold text-gray-900 truncate">{{ $session->vendeur->name }}</p>
-                                            <p class="text-xs text-gray-500 truncate">{{ $session->vendeur->numero_telephone }}</p>
+                                            <p class="text-xs sm:text-sm font-semibold text-gray-900 truncate">{{ $vendeurData['name'] ?? 'N/A' }}</p>
+                                            <p class="text-xs text-gray-500 truncate">{{ $vendeurData['numero_telephone'] ?? '' }}</p>
                                         </div>
                                     </div>
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ $session->categorie == 'boulangerie' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800' }}">
-                                        {{ $isFrench ? ucfirst($session->categorie) : ($session->categorie == 'boulangerie' ? 'Bakery' : 'Pastry') }}
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ $categorie == 'boulangerie' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800' }}">
+                                        {{ $isFrench ? ucfirst($categorie) : ($categorie == 'boulangerie' ? 'Bakery' : 'Pastry') }}
                                     </span>
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 text-xs sm:text-sm text-gray-700 hidden md:table-cell">
-                                    {{ \Carbon\Carbon::parse($session->date_ouverture)->format('d/m/Y H:i') }}
+                                    {{ $dateOuverture ? \Carbon\Carbon::parse($dateOuverture)->format('d/m/Y H:i') : '-' }}
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 text-xs sm:text-sm text-gray-700 hidden xl:table-cell">
-                                    @if($session->date_fermeture)
-                                        {{ \Carbon\Carbon::parse($session->date_fermeture)->format('d/m/Y H:i') }}
+                                    @if($dateFermeture)
+                                        {{ \Carbon\Carbon::parse($dateFermeture)->format('d/m/Y H:i') }}
                                     @else
                                         <span class="text-gray-400">-</span>
                                     @endif
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
-                                    <p class="text-xs sm:text-sm font-bold text-green-600">{{ number_format($session->total_ventes ?? 0, 0, ',', ' ') }} FCFA</p>
-                                    <p class="text-xs text-gray-500">({{ $session->nombre_ventes ?? 0 }} {{ $isFrench ? 'ventes' : 'sales' }})</p>
+                                    <p class="text-xs sm:text-sm font-bold text-green-600">{{ number_format($totalVentes, 0, ',', ' ') }} FCFA</p>
+                                    <p class="text-xs text-gray-500">({{ $nombreVentes }} {{ $isFrench ? 'ventes' : 'sales' }})</p>
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap text-right hidden lg:table-cell">
-                                    @if($session->montant_verse)
-                                        <span class="text-xs sm:text-sm font-semibold text-gray-900">{{ number_format($session->montant_verse, 0, ',', ' ') }} FCFA</span>
+                                    @if($montantVerse)
+                                        <span class="text-xs sm:text-sm font-semibold text-gray-900">{{ number_format($montantVerse, 0, ',', ' ') }} FCFA</span>
                                     @else
                                         <span class="text-gray-400">-</span>
                                     @endif
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap text-center">
-                                    @if($session->statut == 'ouverte')
+                                    @if($statut == 'ouverte')
                                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 animate-pulse">
                                             <i class="fas fa-circle text-green-500 mr-1 text-[8px]"></i>
                                             {{ $isFrench ? 'Ouverte' : 'Open' }}
@@ -272,7 +301,7 @@
                                     @endif
                                 </td>
                                 <td class="px-3 sm:px-6 py-4 whitespace-nowrap text-center">
-                                    <button onclick="openModal{{ $session->id }}()" 
+                                    <button onclick="openModal{{ $sessionId }}()" 
                                         class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-300 inline-flex items-center gap-2">
                                         <i class="fas fa-eye"></i>
                                         <span class="hidden sm:inline">{{ $isFrench ? 'Détails' : 'Details' }}</span>
@@ -281,15 +310,15 @@
                             </tr>
 
                             <!-- Modal -->
-                            <div id="modal{{ $session->id }}" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden overflow-y-auto" onclick="if(event.target === this) closeModal{{ $session->id }}()">
+                            <div id="modal{{ $sessionId }}" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden overflow-y-auto" onclick="if(event.target === this) closeModal{{ $sessionId }}()">
                                 <div class="flex items-center justify-center min-h-screen p-4">
                                     <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-auto overflow-hidden" onclick="event.stopPropagation()">
                                         <div class="bg-gradient-to-r from-amber-600 to-yellow-600 px-6 py-5 flex items-center justify-between">
                                             <h3 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                                                 <i class="fas fa-file-invoice"></i>
-                                                {{ $isFrench ? 'Détails Session' : 'Session Details' }} #{{ $session->id }}
+                                                {{ $isFrench ? 'Détails Session' : 'Session Details' }} #{{ $sessionId }}
                                             </h3>
-                                            <button onclick="closeModal{{ $session->id }}()" class="text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
+                                            <button onclick="closeModal{{ $sessionId }}()" class="text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
                                                 <i class="fas fa-times text-xl"></i>
                                             </button>
                                         </div>
@@ -304,22 +333,22 @@
                                                     <div class="space-y-3 text-sm">
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">{{ $isFrench ? 'Vendeur:' : 'Seller:' }}</span>
-                                                            <span class="text-gray-900">{{ $session->vendeur->name }}</span>
+                                                            <span class="text-gray-900">{{ $vendeurData['name'] ?? 'N/A' }}</span>
                                                         </div>
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">{{ $isFrench ? 'Catégorie:' : 'Category:' }}</span>
-                                                            <span class="px-2 py-1 rounded-lg {{ $session->categorie == 'boulangerie' ? 'bg-amber-200 text-amber-900' : 'bg-blue-200 text-blue-900' }}">
-                                                                {{ $isFrench ? ucfirst($session->categorie) : ($session->categorie == 'boulangerie' ? 'Bakery' : 'Pastry') }}
+                                                            <span class="px-2 py-1 rounded-lg {{ $categorie == 'boulangerie' ? 'bg-amber-200 text-amber-900' : 'bg-blue-200 text-blue-900' }}">
+                                                                {{ $isFrench ? ucfirst($categorie) : ($categorie == 'boulangerie' ? 'Bakery' : 'Pastry') }}
                                                             </span>
                                                         </div>
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">{{ $isFrench ? 'Ouverture:' : 'Opening:' }}</span>
-                                                            <span class="text-gray-900">{{ \Carbon\Carbon::parse($session->date_ouverture)->format('d/m/Y H:i:s') }}</span>
+                                                            <span class="text-gray-900">{{ $dateOuverture ? \Carbon\Carbon::parse($dateOuverture)->format('d/m/Y H:i:s') : '-' }}</span>
                                                         </div>
-                                                        @if($session->date_fermeture)
+                                                        @if($dateFermeture)
                                                             <div class="flex justify-between">
                                                                 <span class="font-semibold text-gray-700">{{ $isFrench ? 'Fermeture:' : 'Closing:' }}</span>
-                                                                <span class="text-gray-900">{{ \Carbon\Carbon::parse($session->date_fermeture)->format('d/m/Y H:i:s') }}</span>
+                                                                <span class="text-gray-900">{{ \Carbon\Carbon::parse($dateFermeture)->format('d/m/Y H:i:s') }}</span>
                                                             </div>
                                                         @endif
                                                     </div>
@@ -333,26 +362,26 @@
                                                     <div class="space-y-3 text-sm">
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">{{ $isFrench ? 'Fond de vente:' : 'Sales fund:' }}</span>
-                                                            <span class="text-gray-900 font-bold">{{ number_format($session->fond_vente, 0, ',', ' ') }} FCFA</span>
+                                                            <span class="text-gray-900 font-bold">{{ number_format($sessionData['fond_vente'] ?? 0, 0, ',', ' ') }} FCFA</span>
                                                         </div>
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">Orange Money:</span>
-                                                            <span class="text-gray-900">{{ number_format($session->orange_money_initial, 0, ',', ' ') }} FCFA</span>
+                                                            <span class="text-gray-900">{{ number_format($sessionData['orange_money_initial'] ?? 0, 0, ',', ' ') }} FCFA</span>
                                                         </div>
                                                         <div class="flex justify-between">
                                                             <span class="font-semibold text-gray-700">MTN Money:</span>
-                                                            <span class="text-gray-900">{{ number_format($session->mtn_money_initial, 0, ',', ' ') }} FCFA</span>
+                                                            <span class="text-gray-900">{{ number_format($sessionData['mtn_money_initial'] ?? 0, 0, ',', ' ') }} FCFA</span>
                                                         </div>
-                                                        @if($session->statut == 'fermee')
+                                                        @if($statut == 'fermee')
                                                             <hr class="border-green-300">
                                                             <div class="flex justify-between">
                                                                 <span class="font-semibold text-gray-700">{{ $isFrench ? 'Montant versé:' : 'Amount paid:' }}</span>
-                                                                <span class="text-green-700 font-bold">{{ number_format($session->montant_verse ?? 0, 0, ',', ' ') }} FCFA</span>
+                                                                <span class="text-green-700 font-bold">{{ number_format($montantVerse ?? 0, 0, ',', ' ') }} FCFA</span>
                                                             </div>
                                                             <div class="flex justify-between items-center">
                                                                 <span class="font-semibold text-gray-700">{{ $isFrench ? 'Manquant:' : 'Missing:' }}</span>
-                                                                <span class="px-3 py-1 rounded-lg font-bold {{ $session->manquant == 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800' }}">
-                                                                    {{ number_format($session->manquant ?? 0, 0, ',', ' ') }} FCFA
+                                                                <span class="px-3 py-1 rounded-lg font-bold {{ ($sessionData['manquant'] ?? 0) == 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800' }}">
+                                                                    {{ number_format($sessionData['manquant'] ?? 0, 0, ',', ' ') }} FCFA
                                                                 </span>
                                                             </div>
                                                         @endif
@@ -360,7 +389,7 @@
                                                 </div>
                                             </div>
 
-                                            @if(isset($session->ventes) && $session->ventes->count() > 0)
+                                            @if(is_array($ventes) && count($ventes) > 0)
                                                 <div class="bg-blue-50 rounded-xl p-5 border-2 border-blue-200">
                                                     <h4 class="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
                                                         <i class="fas fa-shopping-cart"></i>
@@ -378,19 +407,29 @@
                                                                 </tr>
                                                             </thead>
                                                             <tbody class="divide-y divide-blue-200">
-                                                                @foreach($session->ventes as $vente)
+                                                                @php
+                                                                    $totalVentesModal = 0;
+                                                                @endphp
+                                                                @foreach($ventes as $vente)
+                                                                    @php
+                                                                        $venteData = is_array($vente) ? $vente : (array) $vente;
+                                                                        $produit = $venteData['produit'] ?? null;
+                                                                        $produitData = is_array($produit) ? $produit : (is_object($produit) ? (array) $produit : []);
+                                                                        $montantVente = $venteData['montant_total'] ?? 0;
+                                                                        $totalVentesModal += $montantVente;
+                                                                    @endphp
                                                                     <tr class="hover:bg-blue-100 transition-colors">
-                                                                        <td class="px-3 py-2 font-medium text-gray-900">{{ $vente->produit->nom ?? 'N/A' }}</td>
-                                                                        <td class="px-3 py-2 text-center text-gray-700">{{ $vente->quantite }}</td>
-                                                                        <td class="px-3 py-2 text-right text-gray-700">{{ number_format($vente->prix_unitaire, 0, ',', ' ') }}</td>
-                                                                        <td class="px-3 py-2 text-right font-bold text-green-700">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
-                                                                        <td class="px-3 py-2 text-center text-gray-600 text-xs">{{ \Carbon\Carbon::parse($vente->created_at)->format('d/m/Y H:i') }}</td>
+                                                                        <td class="px-3 py-2 font-medium text-gray-900">{{ $produitData['nom'] ?? 'N/A' }}</td>
+                                                                        <td class="px-3 py-2 text-center text-gray-700">{{ $venteData['quantite'] ?? 0 }}</td>
+                                                                        <td class="px-3 py-2 text-right text-gray-700">{{ number_format($venteData['prix_unitaire'] ?? 0, 0, ',', ' ') }}</td>
+                                                                        <td class="px-3 py-2 text-right font-bold text-green-700">{{ number_format($montantVente, 0, ',', ' ') }}</td>
+                                                                        <td class="px-3 py-2 text-center text-gray-600 text-xs">{{ isset($venteData['created_at']) ? \Carbon\Carbon::parse($venteData['created_at'])->format('d/m/Y H:i') : '-' }}</td>
                                                                     </tr>
                                                                 @endforeach
                                                                 <tr class="bg-green-200 font-bold">
                                                                     <td colspan="3" class="px-3 py-3 text-right text-green-900 uppercase">{{ $isFrench ? 'Total:' : 'Total:' }}</td>
                                                                     <td colspan="2" class="px-3 py-3 text-right text-green-900 text-lg">
-                                                                        {{ number_format($session->ventes->sum('montant_total'), 0, ',', ' ') }} FCFA
+                                                                        {{ number_format($totalVentesModal, 0, ',', ' ') }} FCFA
                                                                     </td>
                                                                 </tr>
                                                             </tbody>
@@ -408,7 +447,7 @@
                                         </div>
                                         
                                         <div class="bg-gray-50 px-6 py-4 flex justify-end">
-                                            <button onclick="closeModal{{ $session->id }}()" 
+                                            <button onclick="closeModal{{ $sessionId }}()" 
                                                 class="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2">
                                                 <i class="fas fa-times"></i>
                                                 {{ $isFrench ? 'Fermer' : 'Close' }}
@@ -419,13 +458,13 @@
                             </div>
 
                             <script>
-                                function openModal{{ $session->id }}() {
-                                    document.getElementById('modal{{ $session->id }}').classList.remove('hidden');
+                                function openModal{{ $sessionId }}() {
+                                    document.getElementById('modal{{ $sessionId }}').classList.remove('hidden');
                                     document.body.style.overflow = 'hidden';
                                 }
                                 
-                                function closeModal{{ $session->id }}() {
-                                    document.getElementById('modal{{ $session->id }}').classList.add('hidden');
+                                function closeModal{{ $sessionId }}() {
+                                    document.getElementById('modal{{ $sessionId }}').classList.add('hidden');
                                     document.body.style.overflow = 'auto';
                                 }
                             </script>
@@ -452,7 +491,7 @@
         </div>
 
         <!-- Pagination si nécessaire -->
-        @if(method_exists($sessions, 'links'))
+        @if(is_object($sessions) && method_exists($sessions, 'links'))
             <div class="mt-6">
                 {{ $sessions->links() }}
             </div>

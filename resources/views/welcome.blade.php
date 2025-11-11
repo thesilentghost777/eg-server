@@ -410,13 +410,7 @@
                         </div>
                     </div>
 
-                    <div class="bg-gradient-to-br from-red-500 to-red-600 p-6 rounded-2xl text-white shadow-xl col-span-2">
-                        <i class="fas fa-dollar-sign text-4xl mb-4 opacity-90"></i>
-                        <div class="text-4xl font-bold mb-2">0</div>
-                        <div class="text-red-100">
-                            {{ $isFrench ? 'Pertes non détectées' : 'Undetected losses' }}
-                        </div>
-                    </div>
+                    
                 </div>
             </div>
         </div>

@@ -102,6 +102,7 @@ return new class extends Migration
             $table->decimal('orange_money_final', 10, 2)->nullable();
             $table->decimal('mtn_money_final', 10, 2)->nullable();
             $table->decimal('manquant', 10, 2)->nullable();
+            $table->decimal('valeur_vente', 10, 2)->nullable();
             $table->enum('statut', ['ouverte', 'fermee'])->default('ouverte');
             $table->foreignId('fermee_par')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('date_ouverture');
@@ -123,7 +124,7 @@ return new class extends Migration
             $table->json('synced_clients')->nullable();
             $table->timestamps();
         });
-
+        
         // Table de configuration PDG
         Schema::create('config_pdg', function (Blueprint $table) {
             $table->id();

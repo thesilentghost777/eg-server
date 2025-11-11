@@ -9,6 +9,7 @@ use App\Models\RetourProduit;
 use App\Models\Produit;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class PdgService
@@ -125,167 +126,337 @@ class PdgService
         return round($total, 2);
     }
 
-    /**
-     * Obtenir le flux opérationnel détaillé pour une date
-     */
-    public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
-    {
-        $dateCarbon = Carbon::parse($date);
-        
-        // Récupérer tous les vendeurs actifs ou un vendeur spécifique
-        $vendeurs = $vendeurId 
-            ? User::where('id', $vendeurId)->get()
-            : User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])->get();
+/**
+ * Obtenir le flux opérationnel détaillé pour une date
+ */
+public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
+{
+    $dateCarbon = Carbon::parse($date);
+    
+    Log::info("=== FLUX OPERATIONNEL ===");
+    Log::info("Date: {$date}, Vendeur ID: {$vendeurId}, Produit ID: {$produitId}");
+    
+    // Récupérer tous les vendeurs actifs ou un vendeur spécifique
+    $vendeurs = $vendeurId 
+        ? User::where('id', $vendeurId)->get()
+        : User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])->where('actif', true)->get();
 
-        $flux = [];
+    Log::info("Nombre de vendeurs à traiter: " . $vendeurs->count());
 
-        foreach ($vendeurs as $vendeur) {
-            $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $date, $produitId);
-            
-            if (!empty($fluxVendeur['flux'])) {
-                $flux[] = [
-                    'vendeur' => [
-                        'id' => $vendeur->id,
-                        'nom' => $vendeur->name,
-                        'role' => $vendeur->role,
-                    ],
-                    'periode' => $fluxVendeur['periode'],
-                    'produits' => $fluxVendeur['flux'],
-                    'total_ventes' => $fluxVendeur['total_ventes'],
-                ];
-            }
-        }
+    $flux = [];
 
-        return [
-            'date' => $date,
-            'flux' => $flux,
-            'resume' => $this->getResumeFlux($flux),
-        ];
-    }
-
-    /**
-     * Obtenir le flux par vendeur
-     */
-    public function getFluxParVendeur($vendeurId, $date = null, $produitId = null)
-    {
-        $date = $date ?? now()->toDateString();
-        $dateCarbon = Carbon::parse($date);
+    foreach ($vendeurs as $vendeur) {
+        Log::info("Traitement vendeur: {$vendeur->name} (ID: {$vendeur->id})");
         
-        // Récupérer l'inventaire de début
-        $inventaireDebut = $this->trouverInventaireDebut($vendeurId, $dateCarbon);
+        $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $date, $produitId);
         
-        // Récupérer l'inventaire de fin
-        $inventaireFin = $this->trouverInventaireFin($vendeurId, $dateCarbon);
-        
-        // Déterminer la période réelle du flux
-        $dateDebut = $inventaireDebut ? Carbon::parse($inventaireDebut->date_inventaire) : $dateCarbon->copy()->startOfDay();
-        $dateFin = $inventaireFin ? Carbon::parse($inventaireFin->date_inventaire) : $dateCarbon->copy()->endOfDay();
-        
-        // Récupérer toutes les réceptions entre le début et la fin du flux
-        $receptions = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
-            ->whereBetween('date_reception', [$dateDebut, $dateFin])
-            ->with('produit')
-            ->get();
-        
-        // Récupérer tous les retours entre le début et la fin du flux
-        $retours = RetourProduit::where('vendeur_id', $vendeurId)
-            ->whereBetween('date_retour', [$dateDebut, $dateFin])
-            ->with('produit')
-            ->get();
-        
-        // Construire le flux pour chaque produit
-        $flux = [];
-        $produitsQuery = Produit::where('actif', true);
-        
-        if ($produitId) {
-            $produitsQuery->where('id', $produitId);
+        if (!$fluxVendeur) {
+            Log::info("Vendeur {$vendeur->name} n'a aucune plage opérationnelle valide pour cette date");
+            continue;
         }
         
-        $produits = $produitsQuery->get();
-        $totalVentes = 0;
+        // Ne garder que les vendeurs qui ont une activité
+        $hasActivite = collect($fluxVendeur['flux'])->sum(function($item) {
+            return $item['quantite_trouvee'] + $item['quantite_recue'] + 
+                   $item['quantite_retour'] + $item['quantite_restante'];
+        }) > 0;
         
-        foreach ($produits as $produit) {
-            $quantiteTrouvee = 0;
-            $quantiteRecue = 0;
-            $quantiteRetour = 0;
-            $quantiteRestante = 0;
-            
-            // Quantité trouvée (inventaire début)
-            if ($inventaireDebut) {
-                $detail = $inventaireDebut->details->where('produit_id', $produit->id)->first();
-                $quantiteTrouvee = $detail ? $detail->quantite_restante : 0;
-            }
-            
-            // Quantité reçue
-            $quantiteRecue = $receptions->where('produit_id', $produit->id)->sum('quantite');
-            
-            // Quantité retour
-            $quantiteRetour = $retours->where('produit_id', $produit->id)->sum('quantite');
-            
-            // Quantité restante (inventaire fin)
-            if ($inventaireFin) {
-                $detail = $inventaireFin->details->where('produit_id', $produit->id)->first();
-                $quantiteRestante = $detail ? $detail->quantite_restante : 0;
-            }
-            
-            // Quantité vendue = Trouvée + Reçue - Retour - Restante
-            $quantiteVendue = max(0, $quantiteTrouvee + $quantiteRecue - $quantiteRetour - $quantiteRestante);
-            $valeurVente = $quantiteVendue * $produit->prix;
-            $totalVentes += $valeurVente;
-            
+        if ($hasActivite) {
+            Log::info("Vendeur {$vendeur->name} a une activité");
             $flux[] = [
-                'produit_id' => $produit->id,
-                'produit_nom' => $produit->nom,
-                'produit_categorie' => $produit->categorie,
-                'prix_unitaire' => $produit->prix,
-                'quantite_trouvee' => $quantiteTrouvee,
-                'quantite_recue' => $quantiteRecue,
-                'quantite_retour' => $quantiteRetour,
-                'quantite_restante' => $quantiteRestante,
-                'quantite_vendue' => $quantiteVendue,
-                'valeur_vente' => round($valeurVente, 2),
+                'vendeur' => [
+                    'id' => $vendeur->id,
+                    'nom' => $vendeur->name,
+                    'role' => $vendeur->role,
+                ],
+                'periode' => $fluxVendeur['periode'],
+                'produits' => $fluxVendeur['flux'],
+                'total_ventes' => $fluxVendeur['total_ventes'],
             ];
+        } else {
+            Log::info("Vendeur {$vendeur->name} n'a aucune activité pour cette date");
+        }
+    }
+
+    Log::info("Nombre de vendeurs avec activité: " . count($flux));
+
+    return [
+        'date' => $date,
+        'flux' => $flux,
+        'resume' => $this->getResumeFlux($flux),
+    ];
+}
+
+/**
+ * Obtenir le flux par vendeur
+ */
+public function getFluxParVendeur($vendeurId, $date = null, $produitId = null)
+{
+    $date = $date ?? now()->toDateString();
+    $dateCarbon = Carbon::parse($date);
+    
+    Log::info("--- Flux pour vendeur {$vendeurId} ---");
+    Log::info("Date demandée: {$date}");
+    
+    // Trouver l'inventaire de début (vendeur_entrant)
+    $inventaireDebut = $this->trouverInventaireDebut($vendeurId, $dateCarbon);
+    
+    if (!$inventaireDebut) {
+        Log::info("Aucun inventaire début trouvé pour le vendeur");
+        return null;
+    }
+    
+    Log::info("Inventaire début trouvé - ID: {$inventaireDebut->id}, Date: {$inventaireDebut->date_inventaire}");
+    
+    // Trouver l'inventaire de fin (vendeur_sortant) qui correspond
+    $inventaireFin = $this->trouverInventaireFin($vendeurId, $dateCarbon, $inventaireDebut);
+    
+    if ($inventaireFin) {
+        Log::info("Inventaire fin trouvé - ID: {$inventaireFin->id}, Date: {$inventaireFin->date_inventaire}");
+    } else {
+        Log::info("Aucun inventaire fin trouvé");
+    }
+    
+    // Définir la plage opérationnelle
+    $dateDebut = Carbon::parse($inventaireDebut->date_inventaire)->startOfDay();
+    $dateFin = $inventaireFin 
+        ? Carbon::parse($inventaireFin->date_inventaire)->endOfDay()
+        : $dateCarbon->copy()->endOfDay();
+    
+    // Vérifier que la période ne dépasse pas 24h
+    $dureeHeures = $dateDebut->diffInHours($dateFin);
+    if ($dureeHeures > 24) {
+        Log::warning("Période opérationnelle dépasse 24h ({$dureeHeures}h) - Inventaires incohérents");
+        return null;
+    }
+    
+    Log::info("Période opérationnelle valide: de {$dateDebut} à {$dateFin} ({$dureeHeures}h)");
+    
+    // Récupérer toutes les réceptions dans la plage opérationnelle
+    $receptions = ReceptionPointeur::where('vendeur_assigne_id', $vendeurId)
+        ->whereBetween('date_reception', [$dateDebut, $dateFin])
+        ->with('produit')
+        ->get();
+    
+    Log::info("Réceptions trouvées: " . $receptions->count());
+    
+    // Récupérer tous les retours dans la plage opérationnelle
+    $retours = RetourProduit::where('vendeur_id', $vendeurId)
+        ->whereBetween('date_retour', [$dateDebut, $dateFin])
+        ->with('produit')
+        ->get();
+    
+    Log::info("Retours trouvés: " . $retours->count());
+    
+    // Construire le flux pour chaque produit
+    $flux = [];
+    $produitsQuery = Produit::where('actif', true);
+    
+    if ($produitId) {
+        $produitsQuery->where('id', $produitId);
+    }
+    
+    $produits = $produitsQuery->get();
+    $totalVentes = 0;
+    $produitsAvecActivite = 0;
+    
+    Log::info("Produits à analyser: " . $produits->count());
+    
+    foreach ($produits as $produit) {
+        $quantiteTrouvee = 0;
+        $quantiteRecue = 0;
+        $quantiteRetour = 0;
+        $quantiteRestante = 0;
+        
+        // Quantité trouvée (inventaire début)
+        if ($inventaireDebut) {
+            $detail = $inventaireDebut->details->where('produit_id', $produit->id)->first();
+            $quantiteTrouvee = $detail ? $detail->quantite_restante : 0;
         }
         
-        return [
-            'periode' => [
-                'debut' => $inventaireDebut ? $inventaireDebut->date_inventaire : null,
-                'fin' => $inventaireFin ? $inventaireFin->date_inventaire : null,
-            ],
-            'flux' => $flux,
-            'total_ventes' => round($totalVentes, 2),
+        // Quantité reçue
+        $quantiteRecue = $receptions->where('produit_id', $produit->id)->sum('quantite');
+        
+        // Quantité retour
+        $quantiteRetour = $retours->where('produit_id', $produit->id)->sum('quantite');
+        
+        // Quantité restante (inventaire fin)
+        if ($inventaireFin) {
+            $detail = $inventaireFin->details->where('produit_id', $produit->id)->first();
+            $quantiteRestante = $detail ? $detail->quantite_restante : 0;
+        }
+        
+        // Quantité vendue = Trouvée + Reçue - Retour - Restante
+        $quantiteVendue = max(0, $quantiteTrouvee + $quantiteRecue - $quantiteRetour - $quantiteRestante);
+        $valeurVente = $quantiteVendue * $produit->prix;
+        $totalVentes += $valeurVente;
+        
+        // Log seulement les produits avec activité
+        if ($quantiteTrouvee > 0 || $quantiteRecue > 0 || $quantiteRetour > 0 || $quantiteRestante > 0) {
+            $produitsAvecActivite++;
+            Log::info("Produit [{$produit->id}] {$produit->nom}: T={$quantiteTrouvee}, R={$quantiteRecue}, Ret={$quantiteRetour}, Rest={$quantiteRestante}, V={$quantiteVendue}");
+        }
+        
+        $flux[] = [
+            'produit_id' => $produit->id,
+            'produit_nom' => $produit->nom,
+            'produit_categorie' => $produit->categorie,
+            'prix_unitaire' => $produit->prix,
+            'quantite_trouvee' => $quantiteTrouvee,
+            'quantite_recue' => $quantiteRecue,
+            'quantite_retour' => $quantiteRetour,
+            'quantite_restante' => $quantiteRestante,
+            'quantite_vendue' => $quantiteVendue,
+            'valeur_vente' => round($valeurVente, 2),
         ];
     }
+    
+    Log::info("Produits avec activité: {$produitsAvecActivite}");
+    Log::info("Total ventes: {$totalVentes}");
+    
+    return [
+        'periode' => [
+            'debut' => $dateDebut->toDateTimeString(),
+            'fin' => $dateFin->toDateTimeString(),
+            'date' => $dateCarbon->toDateString(),
+            'duree_heures' => $dureeHeures,
+        ],
+        'flux' => $flux,
+        'total_ventes' => round($totalVentes, 2),
+        'stats' => [
+            'has_inventaire_debut' => $inventaireDebut ? true : false,
+            'has_inventaire_fin' => $inventaireFin ? true : false,
+            'total_receptions' => $receptions->count(),
+            'total_retours' => $retours->count(),
+            'produits_avec_activite' => $produitsAvecActivite,
+        ]
+    ];
+}
 
-    /**
-     * Trouver l'inventaire de début (vendeur entrant)
-     */
-    private function trouverInventaireDebut($vendeurId, Carbon $date)
-    {
-        return Inventaire::where('vendeur_entrant_id', $vendeurId)
-            ->where('valide_entrant', true)
-            ->where('date_inventaire', '<=', $date->copy()->endOfDay())
-            ->orderBy('date_inventaire', 'desc')
-            ->with('details')
-            ->first();
+/**
+ * Trouver l'inventaire de début (vendeur entrant)
+ * Cherche sur la date demandée (J) ou la veille (J-1)
+ * S'assure que l'inventaire de la veille n'a pas été fermé la veille
+ */
+private function trouverInventaireDebut($vendeurId, Carbon $date)
+{
+    // Chercher sur J
+    $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $date)
+        ->with('details')
+        ->first();
+    
+    if ($inventaire) {
+        Log::info("Inventaire entrant trouvé sur J ({$date->toDateString()})");
+        return $inventaire;
     }
-
-    /**
-     * Trouver l'inventaire de fin (vendeur sortant)
-     */
-    private function trouverInventaireFin($vendeurId, Carbon $date)
-    {
-        return Inventaire::where('vendeur_sortant_id', $vendeurId)
-            ->where('valide_sortant', true)
-            ->whereBetween('date_inventaire', [
-                $date->copy()->startOfDay(),
-                $date->copy()->addDay()->endOfDay()
-            ])
-            ->orderBy('date_inventaire', 'desc')
-            ->with('details')
-            ->first();
+    
+    // Chercher sur J-1
+    $dateVeille = $date->copy()->subDay();
+    $inventaireVeille = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $dateVeille)
+        ->with('details')
+        ->first();
+    
+    if (!$inventaireVeille) {
+        Log::info("Aucun inventaire entrant trouvé sur J-1 ({$dateVeille->toDateString()})");
+        return null;
     }
+    
+    // Vérifier que cet inventaire n'a pas été fermé la veille
+    // (c'est-à-dire qu'il n'existe pas d'inventaire sortant pour ce vendeur sur J-1)
+    $inventaireFermeVeille = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $dateVeille)
+        ->exists();
+    
+    if ($inventaireFermeVeille) {
+        Log::info("L'inventaire de J-1 a déjà été fermé la veille - Non valide pour J");
+        return null;
+    }
+    
+    Log::info("Inventaire entrant trouvé sur J-1 ({$dateVeille->toDateString()}) et non fermé - Valide pour J");
+    return $inventaireVeille;
+}
 
+/**
+ * Trouver l'inventaire de fin (vendeur sortant)
+ * Cherche sur la date demandée (J) ou le lendemain (J+1)
+ * S'assure que l'inventaire du lendemain n'a pas été ouvert le lendemain
+ * Vérifie aussi la cohérence avec l'inventaire de début
+ */
+private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut)
+{
+    // Chercher sur J
+    $inventaire = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $date)
+        ->with('details')
+        ->first();
+    
+    if ($inventaire) {
+        // Vérifier la cohérence: l'inventaire de fin sur J doit correspondre à l'inventaire de début
+        $dateDebutInventaire = Carbon::parse($inventaireDebut->date_inventaire);
+        $dateFinInventaire = Carbon::parse($inventaire->date_inventaire);
+        
+        // Ils doivent être sur la même date
+        if ($dateDebutInventaire->isSameDay($dateFinInventaire)) {
+            Log::info("Inventaire sortant trouvé sur J ({$date->toDateString()}) - Cohérent avec l'inventaire entrant");
+            return $inventaire;
+        } else {
+            Log::warning("Inventaire sortant sur J mais incohérent avec l'inventaire entrant (dates différentes)");
+        }
+    }
+    
+    // Chercher sur J+1
+    $dateLendemain = $date->copy()->addDay();
+    $inventaireLendemain = Inventaire::where('vendeur_sortant_id', $vendeurId)
+        ->where('valide_sortant', true)
+        ->whereDate('date_inventaire', $dateLendemain)
+        ->with('details')
+        ->first();
+    
+    if (!$inventaireLendemain) {
+        Log::info("Aucun inventaire sortant trouvé sur J+1 ({$dateLendemain->toDateString()})");
+        return null;
+    }
+    
+    // Vérifier que cet inventaire n'a pas été ouvert le lendemain
+    // (c'est-à-dire qu'il n'existe pas d'inventaire entrant pour ce vendeur sur J+1)
+    $inventaireOuvertLendemain = Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', $dateLendemain)
+        ->exists();
+    
+    if ($inventaireOuvertLendemain) {
+        Log::info("L'inventaire de J+1 a déjà été ouvert le lendemain - Non valide pour J");
+        return null;
+    }
+    
+    // Vérifier la cohérence avec l'inventaire de début
+    $dateDebutInventaire = Carbon::parse($inventaireDebut->date_inventaire);
+    $dateFinInventaire = Carbon::parse($inventaireLendemain->date_inventaire);
+    
+    // L'inventaire de début doit être J-1 ou J, et l'inventaire de fin J+1
+    // La différence doit être <= 1 jour
+    $diffJours = $dateDebutInventaire->diffInDays($dateFinInventaire);
+    
+    if ($diffJours > 1) {
+        Log::warning("Inventaire sortant sur J+1 mais trop éloigné de l'inventaire entrant ({$diffJours} jours)");
+        return null;
+    }
+    
+    // Vérifier que l'inventaire de début est bien J-1 si on utilise un inventaire de fin sur J+1
+    if (!$dateDebutInventaire->isSameDay($date->copy()->subDay()) && !$dateDebutInventaire->isSameDay($date)) {
+        Log::warning("Inventaire sortant sur J+1 mais inventaire entrant non cohérent");
+        return null;
+    }
+    
+    Log::info("Inventaire sortant trouvé sur J+1 ({$dateLendemain->toDateString()}) et non ouvert - Valide pour J");
+    return $inventaireLendemain;
+}
     /**
      * Obtenir la liste détaillée des sessions de vente avec filtres
      */

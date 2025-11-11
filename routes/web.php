@@ -10,7 +10,8 @@ use App\Http\Controllers\Web\FluxProduitController;
 use App\Http\Controllers\Web\PdgController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\UserController;
-
+use App\Http\Controllers\Web\RetourProduitController;
+use App\Http\Controllers\Web\VerrouillageController;
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
@@ -48,6 +49,18 @@ Route::middleware('auth','track_statistic')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
+     // Gestion des retours
+    Route::get('/retours', [RetourProduitController::class, 'index'])->name('retours.index');
+    Route::get('/retours/{retour}', [RetourProduitController::class, 'show'])->name('retours.show');
+    Route::get('/retours/{retour}/edit', [RetourProduitController::class, 'edit'])->name('retours.edit');
+    Route::put('/retours/{retour}', [RetourProduitController::class, 'update'])->name('retours.update');
+    Route::delete('/retours/{retour}', [RetourProduitController::class, 'destroy'])->name('retours.destroy');
+
+    // Gestion du verrouillage
+    Route::get('/verrouillage', [VerrouillageController::class, 'index'])->name('verrouillage.index');
+    Route::post('/verrouillage/verrouiller', [VerrouillageController::class, 'verrouiller'])->name('verrouillage.verrouiller');
+    Route::post('/verrouillage/deverrouiller', [VerrouillageController::class, 'deverrouiller'])->name('verrouillage.deverrouiller');
+    
     // Produits
     Route::prefix('produits')->name('produits.')->group(function () {
         Route::get('/', [ProduitController::class, 'index'])->name('index');
@@ -70,6 +83,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/{id}', [SessionVenteController::class, 'update'])->name('update');
     Route::get('/{id}/fermer', [SessionVenteController::class, 'showFermer'])->name('fermer.form');
     Route::post('/{id}/fermer', [SessionVenteController::class, 'fermer'])->name('fermer');
+
+   
 });
 
     
