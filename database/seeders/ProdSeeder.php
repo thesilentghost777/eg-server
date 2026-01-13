@@ -28,10 +28,10 @@ class ProdSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'name' => 'Samba Tankru',
+                'name' => 'unspecified',
                 'numero_telephone' => '633445566',
                 'role' => 'producteur',
-                'code_pin' => Hash::make('4321'),
+                'code_pin' => Hash::make('1234'),
                 'actif' => true,
                 'preferred_language' => 'fr',
                 'synced_clients' => json_encode([]),

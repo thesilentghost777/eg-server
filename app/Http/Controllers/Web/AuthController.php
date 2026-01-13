@@ -28,50 +28,26 @@ class AuthController extends Controller
     }
 
     public function inscription(Request $request)
-{
-    Log::info('--- Début de la méthode inscription ---');
-
-    try {
-        Log::info('Données reçues pour inscription', $request->all());
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'numero_telephone' => 'required|string|unique:users,numero_telephone',
-            'role' => 'required|in:pdg,pointeur,vendeur_boulangerie,vendeur_patisserie,producteur',
-            'code_pin' => 'required|string|min:4',
-            'code_pdg' => 'required_if:role,pdg',
-            'preferred_language' => 'nullable|string|in:fr,en',
-        ]);
-
-        Log::info('Validation réussie', $validated);
-
-        
-        $user = $this->authService->inscription2($validated);
-
-        Log::info('Utilisateur créé avec succès', [
-            'user_id' => $user->id ?? null,
-            'role' => $user->role ?? null,
-            'telephone' => $user->numero_telephone ?? null,
-        ]);
-
-        Log::info('--- Fin normale de la méthode inscription ---');
-
-        return redirect()->route('login')->with('success', 'Inscription réussie ! Vous pouvez maintenant vous connecter.');
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        Log::warning('Erreur de validation lors de l’inscription', [
-            'errors' => $e->errors(),
-            'input' => $request->all(),
-        ]);
-        return back()->withInput()->withErrors($e->errors());
-    } catch (\Throwable $e) {
-        Log::error('Erreur inattendue lors de l’inscription', [
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return back()->withInput()->with('error', 'Une erreur est survenue : ' . $e->getMessage());
+    {
+        Log::info("tentative d'inscription", ['input' => $request->all()]);
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'numero_telephone' => 'required|string|unique:users,numero_telephone',
+                'role' => 'required|in:pdg,pointeur,vendeur_boulangerie,vendeur_patisserie,producteur',
+                'code_pin' => 'required|string|min:4',
+                'code_pdg' => 'required_if:role,pdg',
+                'preferred_language' => 'nullable|string|in:fr,en',
+            ]);
+            
+            $user = $this->authService->inscription2($validated);
+            return redirect()->route('login')->with('success', 'Inscription réussie !');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', 'Erreur: ' . $e->getMessage());
+        }
     }
-}
 
     public function login(Request $request)
     {
@@ -86,21 +62,35 @@ class AuthController extends Controller
                 $validated['code_pin']
             );
 
-            // Connecter l'utilisateur via session web
             Auth::login($result['user']);
 
-            return redirect()->route('pdg.dashboard')->with('success', 'Connexion réussie !');
+            // Redirection selon le rôle
+            $route = $this->getRouteForRole($result['user']->role);
+            return redirect()->route($route)->with('success', 'Connexion réussie !');
         } catch (\Exception $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
     }
 
     public function logout(Request $request)
-{
-    Auth::guard('web')->logout();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-    
-    return redirect('/');
-}
+    {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect('/');
+    }
+
+    /**
+     * Obtenir la route de redirection selon le rôle
+     */
+    private function getRouteForRole(string $role): string
+    {
+        return match ($role) {
+            'pdg' => 'pdg.dashboard',
+            'pointeur' => 'pointeur.dashboard',
+            'vendeur_boulangerie', 'vendeur_patisserie' => 'vendeur.dashboard',
+            'producteur' => 'dashboard',
+            default => 'dashboard',
+        };
+    }
 }

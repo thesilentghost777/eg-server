@@ -21,38 +21,34 @@ class AuthApiController extends Controller
     /**
      * Inscription d'un nouvel utilisateur
      */
-  public function inscription(InscriptionRequest $request)
+    public function inscription(InscriptionRequest $request)
     {
         try {
             $result = $this->authService->inscription($request->validated());
             $user = $result['user'];
             $clientId = $result['client_id'];
-            
             $token = $user->createToken('auth_token')->plainTextToken;
-            
+
             Log::info("Inscription réussie", [
                 'user_id' => $user->id,
                 'client_id' => $clientId
             ]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Inscription réussie',
                 'user' => $user,
                 'token' => $token,
-                'client_id' => $clientId,
+                'client_id' => $clientId, // ✅ Client ID renvoyé
             ], 201);
-            
         } catch (\Exception $e) {
             Log::error("Erreur inscription: " . $e->getMessage());
-            
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 400);
         }
     }
-
 
     /**
      * Connexion d'un utilisateur
@@ -64,19 +60,20 @@ class AuthApiController extends Controller
                 $request->numero_telephone,
                 $request->code_pin
             );
-            
-            Log::info("Connexion réussie pour l'utilisateur ID: " . $result['user']->id);
-            
+
+            Log::info("Connexion réussie pour l'utilisateur ID: " . $result['user']->id, [
+                'client_id' => $result['client_id'] ?? 'N/A'
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Connexion réussie',
                 'user' => $result['user'],
                 'token' => $result['token'],
+                'client_id' => $result['client_id'], // ✅ Client ID renvoyé
             ], 200);
-            
         } catch (\Exception $e) {
             Log::error("Erreur lors de la connexion: " . $e->getMessage());
-            
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -91,17 +88,14 @@ class AuthApiController extends Controller
     {
         try {
             $this->authService->deconnexion($request->user());
-            
             Log::info("Déconnexion réussie pour l'utilisateur ID: " . $request->user()->id);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Déconnexion réussie',
             ], 200);
-            
         } catch (\Exception $e) {
             Log::error("Erreur lors de la déconnexion: " . $e->getMessage());
-            
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la déconnexion',

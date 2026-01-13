@@ -181,7 +181,6 @@
             }
         </style>
        
-        @PwaHead
     </head>
     <body class="font-sans antialiased">
         <!-- Splash Screen -->
@@ -470,6 +469,5 @@
             }
         </script>
         @include('partials._sweetalert')
-        @RegisterServiceWorkerScript
     </body>
 </html>

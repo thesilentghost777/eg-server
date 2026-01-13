@@ -22,6 +22,13 @@ Route::get('/test', function () {
     return response()->json(['message' => 'The ghost is in the shadow.']);
 });
 
+ Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'message' => 'EasyGestBP API is healthy'
+    ], 200);
+});
+
 //route de synchronisation
 Route::prefix('sync')->group(function () {
         Route::get('/pull', [SyncApiController::class, 'pull']);
@@ -46,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthApiController::class, 'me']);
     });
 
-    
+   
 
     // Produits (PDG uniquement pour créer/modifier)
     Route::prefix('produits')->group(function () {

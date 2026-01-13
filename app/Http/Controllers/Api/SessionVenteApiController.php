@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\SessionVenteService;
-use App\Http\Requests\OuvrirSessionRequest;
+use App\Http\Requests\CreateSessionRequest;
 use App\Http\Requests\FermerSessionRequest;
 use Illuminate\Http\Request;
 
@@ -21,7 +21,7 @@ class SessionVenteApiController extends Controller
      * Ouvrir une session de vente
      * POST /api/sessions-vente/ouvrir
      */
-    public function ouvrir(OuvrirSessionRequest $request)
+    public function ouvrir(CreateSessionRequest $request)
     {
         try {
             $session = $this->sessionVenteService->ouvrirSession(

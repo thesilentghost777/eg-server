@@ -13,19 +13,22 @@ use App\Http\Controllers\Web\UserController;
 use App\Http\Controllers\Web\RetourProduitController;
 use App\Http\Controllers\Web\VerrouillageController;
 
+
+
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::get('/inscription', [AuthController::class, 'showInscription'])->name('inscription');
 Route::post('/inscription', [AuthController::class, 'inscription'])->name('inscription.post');
 
-
+Route::get('/easygest-bp', function () {
+    return view('landing.easygest-bp');
+})->name('landing.easygest-bp');
 
 Route::get('/', function () {
     return view('welcome');
 });
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth'])->name('dashboard');
+
+
 
 Route::get('/test-error', function () {
     // Déclenche une exception volontaire pour tester ton système d'erreur

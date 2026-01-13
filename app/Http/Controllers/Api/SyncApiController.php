@@ -521,7 +521,7 @@ private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additi
         $query->whereIn('inventaire_id', $inventaireIds);
     }
     
-    // ✅ NOUVELLE LOGIQUE: Non synced OU updated_at > last_sync + 5 minutes
+    // ✅ NOUVELLE LOGIQUE: Non synced OU updated_at > last_sync + 1 minutes
     $query->where(function($q) use ($clientId, $lastSync) {
         // Condition 1: Non synced par le client (synced_clients null ou ne contient pas ce client_id)
         $q->where(function($sq) use ($clientId) {
