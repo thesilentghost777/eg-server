@@ -384,35 +384,78 @@ class SyncApiController extends Controller
 /**
  * Synchroniser un détail d'inventaire
  */
+/**
+ * Synchroniser un détail d'inventaire
+ */
 private function syncInventaireDetails($data, $clientId)
 {
     try {
-        // 🔹 Étape 1 : Log des données brutes reçues
         \Log::info('[SYNC INVENTAIRE DETAILS] Début de la synchronisation', [
             'client_id' => $clientId,
             'payload' => $data
         ]);
 
-        // 🔹 Étape 2 : Validation des données obligatoires
-        if (empty($data['inventaire_id']) || empty($data['produit_id'])) {
-            \Log::error('[SYNC INVENTAIRE DETAILS] Données obligatoires manquantes', [
-                'inventaire_id' => $data['inventaire_id'] ?? null,
-                'produit_id' => $data['produit_id'] ?? null
+        // 🔹 Validation : produit_id obligatoire
+        if (empty($data['produit_id'])) {
+            \Log::error('[SYNC INVENTAIRE DETAILS] produit_id manquant', [
+                'payload' => $data
             ]);
-            return ['success' => false, 'reason' => 'inventaire_id ou produit_id manquant'];
+            return ['success' => false, 'reason' => 'produit_id manquant'];
         }
 
-        // 🔹 Étape 3 : Vérification de l'existence de l'inventaire
-        $inventaire = DB::table('inventaires')->find($data['inventaire_id']);
+        // 🔹 NOUVELLE LOGIQUE : Résoudre inventaire_id à partir de inventaire_local_id
+        $inventaire_id = null;
+        
+        if (!empty($data['inventaire_id'])) {
+            // Cas 1 : inventaire_id est fourni directement
+            $inventaire_id = $data['inventaire_id'];
+            \Log::debug('[SYNC INVENTAIRE DETAILS] inventaire_id fourni', [
+                'inventaire_id' => $inventaire_id
+            ]);
+        } elseif (!empty($data['inventaire_local_id'])) {
+            // Cas 2 : inventaire_local_id fourni, on cherche l'inventaire correspondant pour ce client
+            \Log::debug('[SYNC INVENTAIRE DETAILS] Résolution via inventaire_local_id', [
+                'inventaire_local_id' => $data['inventaire_local_id']
+            ]);
+            
+            // Chercher l'inventaire créé par ce client dans cette session de sync
+            // On cherche le dernier inventaire créé/mis à jour pour ce client
+            $inventaire = DB::table('inventaires')
+                ->whereRaw("JSON_CONTAINS(synced_clients, '\"$clientId\"')")
+                ->orderBy('updated_at', 'desc')
+                ->first();
+            
+            if ($inventaire) {
+                $inventaire_id = $inventaire->id;
+                \Log::info('[SYNC INVENTAIRE DETAILS] Inventaire résolu', [
+                    'inventaire_local_id' => $data['inventaire_local_id'],
+                    'inventaire_id' => $inventaire_id
+                ]);
+            } else {
+                \Log::error('[SYNC INVENTAIRE DETAILS] Inventaire parent introuvable via local_id', [
+                    'inventaire_local_id' => $data['inventaire_local_id'],
+                    'client_id' => $clientId
+                ]);
+                return ['success' => false, 'reason' => 'Inventaire parent introuvable'];
+            }
+        } else {
+            \Log::error('[SYNC INVENTAIRE DETAILS] Ni inventaire_id ni inventaire_local_id fourni', [
+                'payload' => $data
+            ]);
+            return ['success' => false, 'reason' => 'inventaire_id ou inventaire_local_id manquant'];
+        }
+
+        // 🔹 Vérification de l'existence de l'inventaire
+        $inventaire = DB::table('inventaires')->find($inventaire_id);
         
         if (!$inventaire) {
             \Log::error('[SYNC INVENTAIRE DETAILS] Inventaire parent introuvable', [
-                'inventaire_id' => $data['inventaire_id']
+                'inventaire_id' => $inventaire_id
             ]);
             return ['success' => false, 'reason' => 'Inventaire parent introuvable'];
         }
 
-        // 🔹 Étape 4 : Vérification de l'existence du produit
+        // 🔹 Vérification de l'existence du produit
         $produit = DB::table('produits')->find($data['produit_id']);
         
         if (!$produit) {
@@ -422,18 +465,18 @@ private function syncInventaireDetails($data, $clientId)
             return ['success' => false, 'reason' => 'Produit introuvable'];
         }
 
-        // 🔹 Étape 5 : Construction des données communes
+        // 🔹 Construction des données communes
         $commonData = [
-            'inventaire_id' => $data['inventaire_id'],
+            'inventaire_id' => $inventaire_id,
             'produit_id' => $data['produit_id'],
             'quantite_restante' => $data['quantite_restante'] ?? 0,
         ];
 
         \Log::debug('[SYNC INVENTAIRE DETAILS] Données communes préparées', $commonData);
 
-        // 🔹 Étape 6 : Vérification d'un doublon (même inventaire + même produit)
+        // 🔹 Vérification d'un doublon (même inventaire + même produit)
         $existing = DB::table('inventaire_details')
-            ->where('inventaire_id', $data['inventaire_id'])
+            ->where('inventaire_id', $inventaire_id)
             ->where('produit_id', $data['produit_id'])
             ->first();
 
@@ -442,7 +485,7 @@ private function syncInventaireDetails($data, $clientId)
                 'id' => $existing->id
             ]);
 
-            // 🔹 Gestion de la synchronisation client
+            // Gestion de la synchronisation client
             $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
             if (!in_array($clientId, $syncedClients)) {
                 $syncedClients[] = $clientId;
@@ -467,7 +510,7 @@ private function syncInventaireDetails($data, $clientId)
             return ['success' => true, 'id' => $existing->id];
         }
 
-        // 🔹 Étape 7 : Création d'un nouveau détail d'inventaire
+        // 🔹 Création d'un nouveau détail d'inventaire
         $commonData['synced_clients'] = json_encode([$clientId]);
         $commonData['created_at'] = now();
         $commonData['updated_at'] = now();
@@ -484,7 +527,6 @@ private function syncInventaireDetails($data, $clientId)
         return ['success' => true, 'id' => $id];
 
     } catch (\Exception $e) {
-        // 🔹 Étape 8 : Log d'erreur détaillé
         \Log::error('[SYNC INVENTAIRE DETAILS] Exception critique', [
             'message' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
