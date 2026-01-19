@@ -132,7 +132,6 @@ class PdgService
 public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
 {
     $dateCarbon = Carbon::parse($date);
-    
     Log::info("=== FLUX OPERATIONNEL ===");
     Log::info("Date: {$date}, Vendeur ID: {$vendeurId}, Produit ID: {$produitId}");
     
@@ -140,11 +139,11 @@ public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
     $vendeurs = $vendeurId 
         ? User::where('id', $vendeurId)->get()
         : User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])->where('actif', true)->get();
-
+    
     Log::info("Nombre de vendeurs à traiter: " . $vendeurs->count());
-
+    
     $flux = [];
-
+    
     foreach ($vendeurs as $vendeur) {
         Log::info("Traitement vendeur: {$vendeur->name} (ID: {$vendeur->id})");
         
@@ -163,6 +162,20 @@ public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
         
         if ($hasActivite) {
             Log::info("Vendeur {$vendeur->name} a une activité");
+            
+            // Trier les produits : d'abord ceux avec au moins un attribut non nul, puis les autres
+            $produitsTries = collect($fluxVendeur['flux'])->sortBy(function($produit) {
+                // Vérifier si au moins un attribut est différent de 0
+                $hasNonZero = ($produit['quantite_trouvee'] ?? 0) > 0 ||
+                             ($produit['quantite_recue'] ?? 0) > 0 ||
+                             ($produit['quantite_retour'] ?? 0) > 0 ||
+                             ($produit['quantite_restante'] ?? 0) > 0;
+                
+                // Retourner 0 pour les produits avec activité (ils seront en premier)
+                // Retourner 1 pour les produits sans activité (ils seront en dernier)
+                return $hasNonZero ? 0 : 1;
+            })->values()->toArray();
+            
             $flux[] = [
                 'vendeur' => [
                     'id' => $vendeur->id,
@@ -170,16 +183,16 @@ public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
                     'role' => $vendeur->role,
                 ],
                 'periode' => $fluxVendeur['periode'],
-                'produits' => $fluxVendeur['flux'],
+                'produits' => $produitsTries,
                 'total_ventes' => $fluxVendeur['total_ventes'],
             ];
         } else {
             Log::info("Vendeur {$vendeur->name} n'a aucune activité pour cette date");
         }
     }
-
+    
     Log::info("Nombre de vendeurs avec activité: " . count($flux));
-
+    
     return [
         'date' => $date,
         'flux' => $flux,

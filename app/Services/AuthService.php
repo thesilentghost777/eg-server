@@ -40,7 +40,7 @@ class AuthService
                 throw new \Exception("Le numéro doit contenir 9 chiffres après le préfixe");
             }
 
-            // ✅ Gérer le client_id (ADAPTÉ À LA STRUCTURE DE LA TABLE)
+            // Gérer le client_id
             $clientId = null;
             $hasClientId = $data['has_client_id'] ?? false;
 
@@ -73,7 +73,8 @@ class AuthService
                 $clientId = $this->createNewClient($data['device_info'] ?? 'Unknown device');
             }
 
-            // Créer l'utilisateur avec le client_id dans synced_clients
+            // 🔥 CORRECTION: Créer l'utilisateur avec le client_id dans synced_clients
+            // (Lors de l'inscription, on synchronise immédiatement car c'est une création)
             $user = User::create([
                 'name' => $data['name'],
                 'numero_telephone' => $numeroTelephone,
@@ -81,7 +82,7 @@ class AuthService
                 'code_pin' => Hash::make($data['code_pin']),
                 'preferred_language' => $data['preferred_language'] ?? 'fr',
                 'actif' => true,
-                'synced_clients' => json_encode([$clientId]) // Le client est synchronisé avec cet utilisateur
+                'synced_clients' => json_encode([$clientId])
             ]);
 
             DB::commit();
@@ -120,8 +121,9 @@ class AuthService
     }
 
     /**
-     * Connexion d'un utilisateur - Gère les nouveaux appareils
-     * ✅ ADAPTÉ À LA STRUCTURE DE LA TABLE (pas de user_id ni last_seen_at)
+     * 🔥 CORRECTION MAJEURE: Connexion d'un utilisateur
+     * NE PAS ajouter le client_id à synced_clients lors de la connexion
+     * Laisser la synchronisation normale s'en charger
      */
     public function connexion($numeroTelephone, $codePin)
     {
@@ -134,7 +136,7 @@ class AuthService
             throw new \Exception("Identifiants incorrects");
         }
 
-        // ✅ Récupérer le client_id envoyé dans le header
+        // Récupérer le client_id envoyé dans le header
         $clientIdFromHeader = request()->header('X-Client-ID');
         
         \Log::info('Connexion - Client ID reçu', [
@@ -185,22 +187,17 @@ class AuthService
                 $clientId = $clientIdFromHeader;
             }
             
-            // Ajouter le client_id à synced_clients de l'utilisateur si pas déjà présent
-            $syncedClients = json_decode($user->synced_clients ?? '[]', true);
-            if (!in_array($clientId, $syncedClients)) {
-                $syncedClients[] = $clientId;
-                $user->synced_clients = json_encode($syncedClients);
-                $user->save();
-                
-                \Log::info('Client ajouté à synced_clients', [
-                    'user_id' => $user->id,
-                    'client_id' => $clientId,
-                    'total_clients' => count($syncedClients)
-                ]);
-            }
+            // 🔥 CORRECTION: NE PAS ajouter le client_id à synced_clients ici
+            // La synchronisation normale (pull) s'en chargera automatiquement
+            // Cela évite le bug où l'utilisateur n'est jamais synchronisé sur un nouvel appareil
+            
+            \Log::info('Client enregistré, synchronisation différée au pull', [
+                'user_id' => $user->id,
+                'client_id' => $clientId
+            ]);
+            
         } else {
-            // ⚠️ Pas de client_id fourni (ne devrait pas arriver avec la nouvelle logique React)
-            // Récupérer le premier client de synced_clients ou en créer un nouveau
+            // Pas de client_id fourni
             $syncedClients = json_decode($user->synced_clients ?? '[]', true);
             
             if (!empty($syncedClients)) {
@@ -217,7 +214,8 @@ class AuthService
                     request()->userAgent() ?? 'Unknown device'
                 );
                 
-                // L'ajouter à synced_clients
+                // Pour un nouveau client sans historique, on peut l'ajouter à synced_clients
+                // car c'est une première connexion absolue
                 $user->synced_clients = json_encode([$clientId]);
                 $user->save();
                 
@@ -240,7 +238,7 @@ class AuthService
         return [
             'user' => $user,
             'token' => $token,
-            'client_id' => $clientId, // ✅ Renvoyer le client_id
+            'client_id' => $clientId,
         ];
     }
 

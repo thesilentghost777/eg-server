@@ -55,9 +55,9 @@
             <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between mb-2">
                     <i class="fas fa-shopping-cart text-3xl text-blue-500"></i>
-                    <span class="text-3xl font-bold text-gray-800">{{ $flux['resume']['total_ventes'] ?? 0 }}</span>
+                    <span class="text-3xl font-bold text-gray-800">{{ number_format($flux['resume']['total_ventes'] ?? 0, 0, ',', ' ') }}</span>
                 </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Valeur Totale (€)' : 'Total Value (€)' }}</h3>
+                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Valeur Totale (FCFA)' : 'Total Value (FCFA)' }}</h3>
             </div>
 
             <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
@@ -71,9 +71,9 @@
             <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
                 <div class="flex items-center justify-between mb-2">
                     <i class="fas fa-dollar-sign text-3xl text-orange-500"></i>
-                    <span class="text-3xl font-bold text-gray-800">{{ number_format($flux['resume']['chiffre_affaire'] ?? 0, 2) }}</span>
+                    <span class="text-3xl font-bold text-gray-800">{{ number_format($flux['resume']['chiffre_affaire'] ?? 0, 0, ',', ' ') }}</span>
                 </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? "Chiffre d'Affaires (€)" : 'Revenue (€)' }}</h3>
+                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? "Chiffre d'Affaires (FCFA)" : 'Revenue (FCFA)' }}</h3>
             </div>
         </div>
         @endif
@@ -95,7 +95,7 @@
                     </div>
                     <div class="text-right">
                         <p class="text-sm text-gray-500">{{ $isFrench ? 'Valeur Totale' : 'Total Value' }}</p>
-                        <p class="text-2xl font-bold text-amber-600">{{ number_format($fluxVendeur['total_ventes'] ?? 0, 2) }} €</p>
+                        <p class="text-2xl font-bold text-amber-600">{{ number_format($fluxVendeur['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA</p>
                     </div>
                 </div>
 
@@ -141,7 +141,7 @@
                                     <span class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
                                         {{ $detail['heure'] ?? '' }} - {{ $detail['quantite'] ?? 0 }} {{ $isFrench ? 'unité(s)' : 'unit(s)' }}
                                         @if(isset($detail['montant']))
-                                        ({{ number_format($detail['montant'], 2) }} €)
+                                        ({{ number_format($detail['montant'], 0, ',', ' ') }} FCFA)
                                         @endif
                                     </span>
                                     @endforeach
@@ -154,7 +154,7 @@
                             <div class="mt-3 pt-3 border-t border-gray-200">
                                 <div class="flex justify-between items-center">
                                     <span class="text-sm text-gray-600">{{ $isFrench ? 'Valeur totale vendue :' : 'Total value sold:' }}</span>
-                                    <span class="text-lg font-bold text-green-600">{{ number_format($produitFlux['valeur_vente'], 2) }} €</span>
+                                    <span class="text-lg font-bold text-green-600">{{ number_format($produitFlux['valeur_vente'], 0, ',', ' ') }} FCFA</span>
                                 </div>
                             </div>
                             @endif
