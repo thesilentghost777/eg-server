@@ -37,7 +37,19 @@ class ProduitService
     public function updateProduit($id, array $data)
     {
         $produit = Produit::findOrFail($id);
-        $produit->update($data);
+
+        $updateData = [
+            'nom'       => $data['nom'] ?? $produit->nom,
+            'prix'      => isset($data['prix']) ? (float) $data['prix'] : $produit->prix,
+            'categorie' => $data['categorie'] ?? $produit->categorie,
+            'actif'     => isset($data['actif'])
+                ? filter_var($data['actif'], FILTER_VALIDATE_BOOLEAN)
+                : $produit->actif,
+        ];
+
+        $produit->update($updateData);
+        $produit->refresh(); // ← très utile pour renvoyer les vraies valeurs
+
         return $produit;
     }
 

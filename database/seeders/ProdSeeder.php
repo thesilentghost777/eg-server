@@ -16,6 +16,19 @@ class ProdSeeder extends Seeder
     {
         DB::table('users')->insert([
             [
+                'name' => 'Boulangerie Française',
+                'numero_telephone' => '633445566',
+                'role' => 'producteur',
+                'code_pin' => Hash::make('1234'),
+                'actif' => true,
+                'preferred_language' => 'fr',
+                'synced_clients' => json_encode([]),
+                'remember_token' => Str::random(10),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+
+            [
                 'name' => 'BiG BoSS',
                 'numero_telephone' => '657929578',
                 'role' => 'pdg',
@@ -27,18 +40,7 @@ class ProdSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-            [
-                'name' => 'unspecified',
-                'numero_telephone' => '633445566',
-                'role' => 'producteur',
-                'code_pin' => Hash::make('1234'),
-                'actif' => true,
-                'preferred_language' => 'fr',
-                'synced_clients' => json_encode([]),
-                'remember_token' => Str::random(10),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
+            
         ]);
     }
 }

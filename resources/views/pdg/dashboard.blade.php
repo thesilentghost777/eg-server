@@ -28,7 +28,7 @@
         <div class="bg-gradient-to-br from-amber-600 to-amber-700 rounded-2xl shadow-xl p-6 sm:p-8 mb-6 sm:mb-8 text-center sm:text-left">
     <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-3 flex items-center justify-center sm:justify-start">
         <i class="fas fa-crown mr-3 text-yellow-300"></i>
-        {{ $isFrench ? 'Tableau de Bord PDG' : 'CEO Dashboard' }}
+        {{ $isFrench ? 'Tableau de Bord DG/PDG' : 'CEO Dashboard' }}
     </h1>
     <p class="text-amber-100 text-sm sm:text-base opacity-90">
         {{ $isFrench ? "Vue d'ensemble complète de votre entreprise" : 'Complete overview of your business' }}
@@ -63,14 +63,14 @@
                 </div>
             </a>
 
-            <a href="{{ route('sessions.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+            <a href="{{ route('retours.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
                 <div class="flex items-center space-x-4">
                     <div class="bg-purple-100 w-14 h-14 rounded-xl flex items-center justify-center">
-                        <i class="fas fa-calendar-alt text-2xl text-purple-600"></i>
+                        <i class="fas fa-undo text-2xl text-purple-600"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Sessions' : 'Sessions' }}</h3>
-                        <p class="text-gray-500 text-sm">{{ $isFrench ? 'Détails des ventes' : 'Sales details' }}</p>
+                        <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Retour' : 'Return' }}</h3>
+                        <p class="text-gray-500 text-sm">{{ $isFrench ? 'Détails des retours' : 'Return details' }}</p>
                     </div>
                 </div>
             </a>
@@ -99,6 +99,18 @@
                     </div>
                 </div>
             </a>
+            <a href="{{ route('produits.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-blue-100 w-14 h-14 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-box text-2xl text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Produits' : 'Products' }}</h3>
+                        <p class="text-gray-500 text-sm">{{ $isFrench ? 'Gérer les produits' : 'Manage products' }}</p>
+                    </div>
+                </div>
+            </a>
+
         </div>
 
         <!-- Recent Activities -->

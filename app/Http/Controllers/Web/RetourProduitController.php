@@ -10,13 +10,48 @@ use Illuminate\Http\Request;
 
 class RetourProduitController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $retours = RetourProduit::with(['pointeur', 'vendeur', 'produit'])
-            ->orderBy('date_retour', 'desc')
-            ->paginate(20);
+        $query = RetourProduit::with(['pointeur', 'vendeur', 'produit']);
 
-        return view('retours.index', compact('retours'));
+        // Filtre par vendeur
+        if ($request->filled('vendeur_id')) {
+            $query->where('vendeur_id', $request->vendeur_id);
+        }
+
+        // Filtre par produit
+        if ($request->filled('produit_id')) {
+            $query->where('produit_id', $request->produit_id);
+        }
+
+        // Filtre par date de début
+        if ($request->filled('date_debut')) {
+            $query->whereDate('date_retour', '>=', $request->date_debut);
+        }
+
+        // Filtre par date de fin
+        if ($request->filled('date_fin')) {
+            $query->whereDate('date_retour', '<=', $request->date_fin);
+        }
+
+        // Filtre par raison
+        if ($request->filled('raison')) {
+            $query->where('raison', $request->raison);
+        }
+
+        $retours = $query->orderBy('date_retour', 'desc')->paginate(20);
+
+        // Données pour les filtres
+        $vendeurs = User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+            ->where('actif', true)
+            ->orderBy('name')
+            ->get();
+        
+        $produits = Produit::where('actif', true)
+            ->orderBy('nom')
+            ->get();
+
+        return view('retours.index', compact('retours', 'vendeurs', 'produits'));
     }
 
     public function show(RetourProduit $retour)

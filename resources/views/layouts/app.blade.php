@@ -229,37 +229,42 @@
                                 </a>
                             </li>
 
-                            <!-- Produits -->
+                           
+                             <!-- Menu PDG -->
+                            @if(auth()->check() && auth()->user()->role === 'pdg')
                             <li class="nav-item group relative" style="z-index: 1001;">
-                                <a class="flex items-center px-4 py-4 text-gray-200 hover:bg-slate-700 hover:text-white transition-all duration-200 rounded-lg font-medium text-sm cursor-pointer" 
-                                   href="{{ route('produits.index') }}">
+                                <a class="flex items-center px-4 py-4 text-gray-200 hover:bg-slate-700 hover:text-white transition-all duration-200 rounded-lg font-medium text-sm cursor-pointer">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                                     </svg>
-                                    {{ $isFrench ?? true ? 'Produits' : 'Products' }}
+                                    {{ $isFrench ?? true ? 'Autre' : 'Others' }}
                                     <svg class="w-4 h-4 ml-1 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                     </svg>
                                 </a>
-                                <ul class="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 -translate-y-2 border border-gray-100" style="z-index: 9999;">
+                                <ul class="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 -translate-y-2 border border-gray-100" style="z-index: 9999;">
+                                   
                                     <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150 rounded-t-lg" 
-                                           href="{{ route('produits.index') }}">
+                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
+                                           href="{{ route('verrouillage.index') }}">
                                             <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                                             </svg>
-                                            {{ $isFrench ?? true ? 'Liste des Produits' : 'Product List' }}
+                                            {{ $isFrench ?? true ? 'Verrouillage Retour et Réception' : 'Return & Receipt Lock' }}
                                         </a>
                                     </li>
+                                   
+                                    <li><hr class="my-2 border-gray-200"></li>
                                     <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150 rounded-b-lg" 
-                                           href="{{ route('produits.create') }}">
+                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
+                                           href="{{ route('pdg.flux.form') }}">
                                             <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                                             </svg>
-                                            {{ $isFrench ?? true ? 'Créer un Produit' : 'Create Product' }}
+                                            {{ $isFrench ?? true ? 'Flux Opérationnel' : 'Operational Flow' }}
                                         </a>
                                     </li>
+                                 
                                 </ul>
                             </li>
 
@@ -297,112 +302,9 @@
                                 </ul>
                             </li>
 
-                            <!-- Menu PDG -->
-                            @if(auth()->check() && auth()->user()->role === 'pdg')
-                            <li class="nav-item group relative" style="z-index: 1001;">
-                                <a class="flex items-center px-4 py-4 text-gray-200 hover:bg-slate-700 hover:text-white transition-all duration-200 rounded-lg font-medium text-sm cursor-pointer">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                                    </svg>
-                                    {{ $isFrench ?? true ? 'PDG' : 'CEO' }}
-                                    <svg class="w-4 h-4 ml-1 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                    </svg>
-                                </a>
-                                <ul class="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 -translate-y-2 border border-gray-100" style="z-index: 9999;">
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150 rounded-t-lg" 
-                                           href="{{ route('pdg.dashboard') }}">
-                                            <svg class="w-4 h-4 mr-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Tableau de bord PDG' : 'CEO Dashboard' }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('pdg.receptions') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Réceptions' : 'Receipts' }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('retours.index') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Retours' : 'Returns' }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('verrouillage.index') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Verrouillage Retour et Réception' : 'Return & Receipt Lock' }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('pdg.inventaires') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Inventaires' : 'Inventories' }}
-                                        </a>
-                                    </li>
-                                    
-                                    <li><hr class="my-2 border-gray-200"></li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('pdg.flux.form') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Flux Opérationnel' : 'Operational Flow' }}
-                                        </a>
-                                    </li>
-                                 
-                                </ul>
-                            </li>
+                           
 
-                            <!-- Gestion des Utilisateurs (PDG) -->
-                            <li class="nav-item group relative" style="z-index: 1001;">
-                                <a class="flex items-center px-4 py-4 text-gray-200 hover:bg-slate-700 hover:text-white transition-all duration-200 rounded-lg font-medium text-sm cursor-pointer">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                                    </svg>
-                                    {{ $isFrench ?? true ? 'Utilisateurs' : 'Users' }}
-                                    <svg class="w-4 h-4 ml-1 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                    </svg>
-                                </a>
-                                <ul class="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform group-hover:translate-y-0 -translate-y-2 border border-gray-100" style="z-index: 9999;">
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150 rounded-t-lg" 
-                                           href="{{ route('users.index') }}">
-                                            <svg class="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Liste des Utilisateurs' : 'User List' }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="flex items-center px-4 py-3 text-gray-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-150" 
-                                           href="{{ route('users.create') }}">
-                                            <svg class="w-4 h-4 mr-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                                            </svg>
-                                            {{ $isFrench ?? true ? 'Créer un Utilisateur' : 'Create User' }}
-                                        </a>
-                                    </li>
-                                    <li><hr class="my-2 border-gray-200"></li>
-                                </ul>
-                            </li>
+                           
                             @endif
                         </ul>
                     </div>

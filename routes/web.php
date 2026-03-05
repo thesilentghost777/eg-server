@@ -31,7 +31,6 @@ Route::get('/', function () {
 
 
 Route::get('/test-error', function () {
-    // Déclenche une exception volontaire pour tester ton système d'erreur
     throw new \Exception('Ceci est une erreur de test !');
 });
 
@@ -52,7 +51,7 @@ Route::middleware('auth','track_statistic')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
-     // Gestion des retours
+    // Gestion des retours
     Route::get('/retours', [RetourProduitController::class, 'index'])->name('retours.index');
     Route::get('/retours/{retour}', [RetourProduitController::class, 'show'])->name('retours.show');
     Route::get('/retours/{retour}/edit', [RetourProduitController::class, 'edit'])->name('retours.edit');
@@ -78,17 +77,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     
     // Sessions de vente
     Route::prefix('sessions-vente')->name('sessions.')->group(function () {
-    Route::get('/', [SessionVenteController::class, 'index'])->name('index');
-    Route::get('/historique', [SessionVenteController::class, 'historique'])->name('historique');
-    Route::get('/active', [SessionVenteController::class, 'showActive'])->name('active');
-    Route::get('/{id}', [SessionVenteController::class, 'show'])->name('show');
-    Route::get('/{id}/edit', [SessionVenteController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [SessionVenteController::class, 'update'])->name('update');
-    Route::get('/{id}/fermer', [SessionVenteController::class, 'showFermer'])->name('fermer.form');
-    Route::post('/{id}/fermer', [SessionVenteController::class, 'fermer'])->name('fermer');
-
-   
-});
+        Route::get('/', [SessionVenteController::class, 'index'])->name('index');
+        Route::get('/historique', [SessionVenteController::class, 'historique'])->name('historique');
+        Route::get('/active', [SessionVenteController::class, 'showActive'])->name('active');
+        Route::get('/{id}', [SessionVenteController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [SessionVenteController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [SessionVenteController::class, 'update'])->name('update');
+        Route::get('/{id}/fermer', [SessionVenteController::class, 'showFermer'])->name('fermer.form');
+        Route::post('/{id}/fermer', [SessionVenteController::class, 'fermer'])->name('fermer');
+    });
 
     
     // Flux produits (pour vendeurs)
@@ -100,15 +97,31 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Routes PDG
     Route::middleware(['role:pdg'])->prefix('pdg')->name('pdg.')->group(function () {
         Route::get('/dashboard', [PdgController::class, 'dashboard'])->name('dashboard');
+        
+        // Réceptions - avec modification
         Route::get('/receptions', [PdgController::class, 'receptions'])->name('receptions');
+        Route::get('/receptions/{id}/edit', [PdgController::class, 'editReception'])->name('receptions.edit');
+        Route::put('/receptions/{id}', [PdgController::class, 'updateReception'])->name('receptions.update');
+        Route::get('/receptions/imprimer', [PdgController::class, 'imprimerReceptions'])->name('receptions.imprimer');
+        
+        // Inventaires - avec modification
         Route::get('/inventaires', [PdgController::class, 'inventaires'])->name('inventaires');
+        Route::get('/inventaires/{id}/edit', [PdgController::class, 'editInventaire'])->name('inventaires.edit');
+        Route::put('/inventaires/{id}', [PdgController::class, 'updateInventaire'])->name('inventaires.update');
+        Route::get('/inventaires/imprimer', [PdgController::class, 'imprimerInventaires'])->name('inventaires.imprimer');
+        
+        // Sessions de vente
         Route::get('/sessions-vente', [PdgController::class, 'sessionsVente'])->name('sessions');
-        Route::get('/flux-operationnel', [PdgController::class, 'fluxOperationnel'])->name('flux');        
+        Route::get('/sessions/{id}/imprimer', [PdgController::class, 'imprimerSession'])->name('session.imprimer');
+        Route::get('/sessions-detaillees', [PdgController::class, 'sessionsDetaillees'])->name('sessions.detaillees');
+        Route::get('/sessions-detaillees/imprimer', [PdgController::class, 'imprimerSessionsDetaillees'])->name('sessions.imprimer');
+        
+        // Flux opérationnel - amélioré
+        Route::get('/flux-operationnel', [PdgController::class, 'fluxOperationnel'])->name('flux');
         Route::get('/flux-operationnel/form', [PdgController::class, 'fluxOperationnelForm'])->name('flux.form');
         Route::get('/flux-operationnel/imprimer', [PdgController::class, 'imprimerFlux'])->name('flux.imprimer');
-        Route::get('/sessions-detaillees', [PdgController::class, 'sessionsDetaillees'])->name('sessions.detaillees');
-        Route::get('/sessions/{id}/imprimer', [PdgController::class, 'imprimerSession'])->name('session.imprimer');
-        Route::get('/sessions-detaillees/imprimer', [PdgController::class, 'imprimerSessionsDetaillees'])->name('sessions.imprimer');
+        
+        // Statistiques et performance
         Route::get('/statistiques', [PdgController::class, 'statistiques'])->name('statistiques');
         Route::get('/vendeurs-performance', [PdgController::class, 'vendeursPerformance'])->name('vendeurs.performance');
     });
@@ -126,4 +139,3 @@ Route::middleware(['auth', 'role:pdg'])->prefix('users')->group(function () {
     Route::delete('/{id}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::get('/producteurs', [UserController::class, 'producteurs'])->name('users.producteurs');
 });
-

@@ -79,19 +79,29 @@ class UserController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        try {
-            $user = $this->userService->updateUser($id, $request->all());
-            
-            return redirect()->route('users.index')
-                ->with('success', 'Utilisateur modifié avec succès');
-            
-        } catch (\Exception $e) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', $e->getMessage());
-        }
+{
+    $validated = $request->validate([
+        'nom'              => 'required|string|max:255',
+        'numero_telephone' => 'required|string|unique:users,numero_telephone,' . $id,
+        'role'             => 'required|in:pdg,pointeur,vendeur_boulangerie,vendeur_patisserie,producteur',
+        'code_pin'         => 'nullable|string|size:6',
+        'actif'            => 'sometimes|boolean',
+    ]);
+
+    try {
+        $user = $this->userService->updateUser($id, $validated);
+
+        return redirect()->route('users.index')
+            ->with('success', 'Utilisateur modifié avec succès');
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return back()->withInput()->withErrors($e->errors());
+    } catch (\Exception $e) {
+        return back()
+            ->withInput()
+            ->with('error', $e->getMessage());
     }
+}
 
     public function toggleActif($id)
     {

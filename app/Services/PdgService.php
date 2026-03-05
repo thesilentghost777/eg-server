@@ -17,188 +17,735 @@ class PdgService
     /**
      * Obtenir les données du dashboard
      */
-    public function getDashboardData($limit = 10)
+     public function getDashboardData($limit = 10)
     {
-        return [
-            'receptions' => $this->getRecentReceptions($limit),
-            'inventaires' => $this->getRecentInventaires($limit),
-            'sessions_vente' => $this->getRecentSessionsVente($limit),
-            'statistiques' => $this->getStatistiquesGlobales(),
-        ];
+        Log::info('=== DEBUT getDashboardData ===', ['limit' => $limit]);
+        
+        try {
+            $data = [
+                'receptions' => $this->getRecentReceptions($limit),
+                'inventaires' => $this->getRecentInventaires($limit),
+                'sessions_vente' => $this->getRecentSessionsVente($limit),
+                'statistiques' => $this->getStatistiquesGlobales(),
+            ];
+            
+            Log::info('Dashboard data récupérées avec succès', [
+                'nb_receptions' => count($data['receptions']),
+                'nb_inventaires' => count($data['inventaires']),
+                'nb_sessions' => count($data['sessions_vente'])
+            ]);
+            
+            return $data;
+        } catch (\Exception $e) {
+            Log::error('ERREUR getDashboardData', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
 
     /**
      * Récupérer les réceptions récentes
      */
-    private function getRecentReceptions($limit)
+        private function getRecentReceptions($limit)
     {
-        return ReceptionPointeur::with(['pointeur', 'producteur', 'produit', 'vendeurAssigne'])
-            ->orderBy('date_reception', 'desc')
-            ->limit($limit)
-            ->get()
-            ->map(function ($reception) {
-                return [
-                    'id' => $reception->id,
-                    'pointeur' => $reception->pointeur->name,
-                    'producteur' => $reception->producteur->name,
-                    'produit' => $reception->produit->nom,
-                    'categorie' => $reception->produit->categorie,
-                    'quantite' => $reception->quantite,
-                    'vendeur_assigne' => $reception->vendeurAssigne ? $reception->vendeurAssigne->name : 'Non assigné',
-                    'verrou' => $reception->verrou,
-                    'date_reception' => $reception->date_reception,
-                    'notes' => $reception->notes,
-                ];
-            });
+        Log::info('--- getRecentReceptions ---', ['limit' => $limit]);
+        
+        try {
+            // Vérifier le nombre total de réceptions dans la BD
+            $totalReceptions = ReceptionPointeur::count();
+            Log::info('Total réceptions dans la BD', ['count' => $totalReceptions]);
+            
+            // Requête avec relations
+            $receptions = ReceptionPointeur::with(['pointeur', 'producteur', 'produit', 'vendeurAssigne'])
+                ->orderBy('date_reception', 'desc')
+                ->limit($limit)
+                ->get();
+            
+            Log::info('Réceptions récupérées', [
+                'count' => $receptions->count(),
+                'first_id' => $receptions->first()?->id,
+                'last_id' => $receptions->last()?->id
+            ]);
+            
+            // Vérifier si les relations sont chargées
+            if ($receptions->isNotEmpty()) {
+                $firstReception = $receptions->first();
+                Log::info('Première réception - relations chargées', [
+                    'pointeur_loaded' => $firstReception->relationLoaded('pointeur'),
+                    'producteur_loaded' => $firstReception->relationLoaded('producteur'),
+                    'produit_loaded' => $firstReception->relationLoaded('produit'),
+                    'vendeurAssigne_loaded' => $firstReception->relationLoaded('vendeurAssigne'),
+                    'pointeur_exists' => $firstReception->pointeur !== null,
+                    'producteur_exists' => $firstReception->producteur !== null,
+                    'produit_exists' => $firstReception->produit !== null,
+                ]);
+            }
+            
+            $mapped = $receptions->map(function ($reception) {
+                try {
+                    $data = [
+                        'id' => $reception->id,
+                        'pointeur' => $reception->pointeur?->name ?? 'N/A',
+                        'producteur' => $reception->producteur?->name ?? 'N/A',
+                        'produit' => $reception->produit?->nom ?? 'N/A',
+                        'categorie' => $reception->produit?->categorie ?? 'N/A',
+                        'quantite' => $reception->quantite,
+                        'vendeur_assigne' => $reception->vendeurAssigne ? $reception->vendeurAssigne->name : 'Non assigné',
+                        'verrou' => $reception->verrou,
+                        'date_reception' => $reception->date_reception,
+                        'notes' => $reception->notes,
+                    ];
+                    
+                    return $data;
+                } catch (\Exception $e) {
+                    Log::error('Erreur mapping réception', [
+                        'reception_id' => $reception->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return null;
+                }
+            })->filter();
+            
+            Log::info('Réceptions mappées', ['count' => $mapped->count()]);
+            
+            return $mapped;
+            
+        } catch (\Exception $e) {
+            Log::error('ERREUR getRecentReceptions', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return collect([]);
+        }
     }
 
     /**
      * Récupérer les inventaires récents
      */
-    private function getRecentInventaires($limit)
+       private function getRecentInventaires($limit)
     {
-        return Inventaire::with(['vendeurSortant', 'vendeurEntrant', 'details.produit'])
-            ->orderBy('date_inventaire', 'desc')
-            ->limit($limit)
-            ->get()
-            ->map(function ($inventaire) {
-                return [
-                    'id' => $inventaire->id,
-                    'vendeur_sortant' => $inventaire->vendeurSortant->name,
-                    'vendeur_entrant' => $inventaire->vendeurEntrant->name,
-                    'categorie' => $inventaire->categorie,
-                    'valide_sortant' => $inventaire->valide_sortant,
-                    'valide_entrant' => $inventaire->valide_entrant,
-                    'statut' => $this->getStatutInventaire($inventaire),
-                    'date_inventaire' => $inventaire->date_inventaire,
-                    'nombre_produits' => $inventaire->details->count(),
-                ];
-            });
+        Log::info('--- getRecentInventaires ---', ['limit' => $limit]);
+        
+        try {
+            // Vérifier le nombre total d'inventaires dans la BD
+            $totalInventaires = Inventaire::count();
+            Log::info('Total inventaires dans la BD', ['count' => $totalInventaires]);
+            
+            // Requête avec relations
+            $inventaires = Inventaire::with(['vendeurSortant', 'vendeurEntrant', 'details.produit'])
+                ->orderBy('date_inventaire', 'desc')
+                ->limit($limit)
+                ->get();
+            
+            Log::info('Inventaires récupérés', [
+                'count' => $inventaires->count(),
+                'first_id' => $inventaires->first()?->id,
+                'last_id' => $inventaires->last()?->id
+            ]);
+            
+            // Vérifier si les relations sont chargées
+            if ($inventaires->isNotEmpty()) {
+                $firstInventaire = $inventaires->first();
+                Log::info('Premier inventaire - relations chargées', [
+                    'vendeurSortant_loaded' => $firstInventaire->relationLoaded('vendeurSortant'),
+                    'vendeurEntrant_loaded' => $firstInventaire->relationLoaded('vendeurEntrant'),
+                    'details_loaded' => $firstInventaire->relationLoaded('details'),
+                    'vendeurSortant_exists' => $firstInventaire->vendeurSortant !== null,
+                    'vendeurEntrant_exists' => $firstInventaire->vendeurEntrant !== null,
+                    'details_count' => $firstInventaire->details->count(),
+                ]);
+            }
+            
+            $mapped = $inventaires->map(function ($inventaire) {
+                try {
+                    $data = [
+                        'id' => $inventaire->id,
+                        'vendeur_sortant' => $inventaire->vendeurSortant?->name ?? 'N/A',
+                        'vendeur_entrant' => $inventaire->vendeurEntrant?->name ?? 'N/A',
+                        'categorie' => $inventaire->categorie,
+                        'valide_sortant' => $inventaire->valide_sortant,
+                        'valide_entrant' => $inventaire->valide_entrant,
+                        'statut' => $this->getStatutInventaire($inventaire),
+                        'date_inventaire' => $inventaire->date_inventaire,
+                        'nombre_produits' => $inventaire->details->count(),
+                    ];
+                    
+                    return $data;
+                } catch (\Exception $e) {
+                    Log::error('Erreur mapping inventaire', [
+                        'inventaire_id' => $inventaire->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return null;
+                }
+            })->filter();
+            
+            Log::info('Inventaires mappés', ['count' => $mapped->count()]);
+            
+            return $mapped;
+            
+        } catch (\Exception $e) {
+            Log::error('ERREUR getRecentInventaires', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return collect([]);
+        }
     }
 
     /**
      * Récupérer les sessions de vente récentes
      */
-    private function getRecentSessionsVente($limit)
+       private function getRecentSessionsVente($limit)
     {
-        return SessionVente::with(['vendeur', 'fermeePar'])
-            ->orderBy('date_ouverture', 'desc')
-            ->limit($limit)
-            ->get()
-            ->map(function ($session) {
-                return $this->formatSessionVente($session);
-            });
+        Log::info('--- getRecentSessionsVente ---', ['limit' => $limit]);
+        
+        try {
+            // Vérifier le nombre total de sessions dans la BD
+            $totalSessions = SessionVente::count();
+            Log::info('Total sessions dans la BD', ['count' => $totalSessions]);
+            
+            $sessions = SessionVente::with(['vendeur', 'fermeePar'])
+                ->orderBy('date_ouverture', 'desc')
+                ->limit($limit)
+                ->get();
+            
+            Log::info('Sessions récupérées', [
+                'count' => $sessions->count(),
+                'first_id' => $sessions->first()?->id,
+                'last_id' => $sessions->last()?->id
+            ]);
+            
+            $mapped = $sessions->map(function ($session) {
+                try {
+                    return $this->formatSessionVente($session);
+                } catch (\Exception $e) {
+                    Log::error('Erreur formatage session', [
+                        'session_id' => $session->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return null;
+                }
+            })->filter();
+            
+            Log::info('Sessions mappées', ['count' => $mapped->count()]);
+            
+            return $mapped;
+            
+        } catch (\Exception $e) {
+            Log::error('ERREUR getRecentSessionsVente', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return collect([]);
+        }
     }
 
     /**
      * Obtenir les statistiques globales
      */
-    private function getStatistiquesGlobales()
+     private function getStatistiquesGlobales()
     {
-        $today = Carbon::today();
+        Log::info('--- getStatistiquesGlobales ---');
         
-        return [
-            'sessions_ouvertes' => SessionVente::where('statut', 'ouverte')->count(),
-            'receptions_aujourdhui' => ReceptionPointeur::whereDate('date_reception', $today)->count(),
-            'inventaires_en_attente' => Inventaire::where(function ($query) {
+        try {
+            $today = Carbon::today();
+            Log::info('Date du jour', ['today' => $today->toDateString()]);
+            
+            $sessionsOuvertes = SessionVente::where('statut', 'ouverte')->count();
+            Log::info('Sessions ouvertes', ['count' => $sessionsOuvertes]);
+            
+            $receptionsAujourdhui = ReceptionPointeur::whereDate('date_reception', $today)->count();
+            Log::info('Réceptions aujourd\'hui', ['count' => $receptionsAujourdhui]);
+            
+            $inventairesEnAttente = Inventaire::where(function ($query) {
                 $query->where('valide_sortant', false)
                       ->orWhere('valide_entrant', false);
-            })->count(),
-            'total_ventes_aujourdhui' => $this->getTotalVentesAujourdhui(),
-        ];
+            })->count();
+            Log::info('Inventaires en attente', ['count' => $inventairesEnAttente]);
+            
+            $totalVentes = $this->getTotalVentesAujourdhui();
+            Log::info('Total ventes aujourd\'hui', ['total' => $totalVentes]);
+            
+            return [
+                'sessions_ouvertes' => $sessionsOuvertes,
+                'receptions_aujourdhui' => $receptionsAujourdhui,
+                'inventaires_en_attente' => $inventairesEnAttente,
+                'total_ventes_aujourdhui' => $totalVentes,
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('ERREUR getStatistiquesGlobales', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return [
+                'sessions_ouvertes' => 0,
+                'receptions_aujourdhui' => 0,
+                'inventaires_en_attente' => 0,
+                'total_ventes_aujourdhui' => 0,
+            ];
+        }
     }
+
 
     /**
      * Calculer le total des ventes du jour
      */
-    private function getTotalVentesAujourdhui()
+        private function getTotalVentesAujourdhui()
     {
-        $sessionsFermees = SessionVente::where('statut', 'fermee')
-            ->whereDate('date_fermeture', Carbon::today())
-            ->get();
+        Log::info('--- getTotalVentesAujourdhui ---');
+        
+        try {
+            $sessionsFermees = SessionVente::where('statut', 'fermee')
+                ->whereDate('date_fermeture', Carbon::today())
+                ->get();
 
-        $total = 0;
-        foreach ($sessionsFermees as $session) {
-            $ventes = $this->calculerVentesSession($session);
-            $total += $ventes;
+            Log::info('Sessions fermées aujourd\'hui', ['count' => $sessionsFermees->count()]);
+
+            $total = 0;
+            foreach ($sessionsFermees as $session) {
+                $ventes = $this->calculerVentesSession($session);
+                Log::info('Ventes calculées pour session', [
+                    'session_id' => $session->id,
+                    'ventes' => $ventes
+                ]);
+                $total += $ventes;
+            }
+
+            Log::info('Total ventes calculé', ['total' => $total]);
+            return round($total, 2);
+            
+        } catch (\Exception $e) {
+            Log::error('ERREUR getTotalVentesAujourdhui', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return 0;
         }
-
-        return round($total, 2);
     }
 
 /**
- * Obtenir le flux opérationnel détaillé pour une date
+ * MÉTHODES AUXILIAIRES (optionnelles mais recommandées)
+ */
+
+/**
+ * Obtenir le dernier inventaire validé pour un vendeur et une catégorie
+ */
+private function getDernierInventaireValide($vendeurId, $categorie, $date)
+{
+    return \App\Models\Inventaire::where('vendeur_entrant_id', $vendeurId)
+        ->where('categorie', $categorie)
+        ->where('valide_entrant', true)
+        ->whereDate('date_inventaire', '<=', $date)
+        ->orderBy('date_inventaire', 'desc')
+        ->first();
+}
+
+
+/**
+ * Calculer les métriques de performance d'un produit
+ */
+private function calculerPerformanceProduit($quantiteVendue, $totalDisponible)
+{
+    if ($totalDisponible <= 0) {
+        return [
+            'taux' => 0,
+            'niveau' => 'no_data',
+            'couleur' => 'gray',
+        ];
+    }
+    
+    $taux = round(($quantiteVendue / $totalDisponible) * 100, 2);
+    
+    if ($taux >= 80) {
+        return ['taux' => $taux, 'niveau' => 'excellent', 'couleur' => 'green'];
+    } elseif ($taux >= 60) {
+        return ['taux' => $taux, 'niveau' => 'bon', 'couleur' => 'blue'];
+    } elseif ($taux >= 40) {
+        return ['taux' => $taux, 'niveau' => 'moyen', 'couleur' => 'yellow'];
+    } else {
+        return ['taux' => $taux, 'niveau' => 'faible', 'couleur' => 'red'];
+    }
+}
+
+/**
+ * CORRECTION DU FILTRE VENDEUR
+ * Cette méthode récupère le flux opérationnel avec un filtre vendeur FONCTIONNEL
  */
 public function getFluxOperationnel($date, $vendeurId = null, $produitId = null)
 {
-    $dateCarbon = Carbon::parse($date);
-    Log::info("=== FLUX OPERATIONNEL ===");
-    Log::info("Date: {$date}, Vendeur ID: {$vendeurId}, Produit ID: {$produitId}");
-    
-    // Récupérer tous les vendeurs actifs ou un vendeur spécifique
-    $vendeurs = $vendeurId 
-        ? User::where('id', $vendeurId)->get()
-        : User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])->where('actif', true)->get();
-    
-    Log::info("Nombre de vendeurs à traiter: " . $vendeurs->count());
-    
-    $flux = [];
-    
-    foreach ($vendeurs as $vendeur) {
-        Log::info("Traitement vendeur: {$vendeur->name} (ID: {$vendeur->id})");
+    $dateCarbon = Carbon::parse($date)->startOfDay();
+    Log::info("=== FLUX OPERATIONNEL (FILTRE VENDEUR CORRIGÉ) ===", [
+        'date'       => $dateCarbon->toDateString(),
+        'vendeur_id' => $vendeurId,
+        'produit_id' => $produitId,
+    ]);
+
+    // CORRECTION: Si un vendeur est spécifié, on traite UNIQUEMENT ce vendeur
+    if ($vendeurId) {
+        Log::info("Filtre vendeur actif - Traitement du vendeur ID: {$vendeurId}");
         
-        $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $date, $produitId);
+        // Vérifier que le vendeur existe et est actif
+        $vendeur = User::where('id', $vendeurId)
+            ->where('actif', true)
+            ->whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+            ->first();
         
-        if (!$fluxVendeur) {
-            Log::info("Vendeur {$vendeur->name} n'a aucune plage opérationnelle valide pour cette date");
-            continue;
+        if (!$vendeur) {
+            Log::warning("Vendeur {$vendeurId} non trouvé ou inactif");
+            return [
+                'flux' => [],
+                'resume' => [
+                    'total_ventes' => 0,
+                    'total_produits' => 0,
+                    'total_receptions' => 0,
+                    'date' => $dateCarbon->format('Y-m-d'),
+                ],
+            ];
         }
         
-        // Ne garder que les vendeurs qui ont une activité
-        $hasActivite = collect($fluxVendeur['flux'])->sum(function($item) {
-            return $item['quantite_trouvee'] + $item['quantite_recue'] + 
-                   $item['quantite_retour'] + $item['quantite_restante'];
-        }) > 0;
+        // Traiter uniquement ce vendeur
+        $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $dateCarbon, $produitId);
         
-        if ($hasActivite) {
-            Log::info("Vendeur {$vendeur->name} a une activité");
-            
-            // Trier les produits : d'abord ceux avec au moins un attribut non nul, puis les autres
-            $produitsTries = collect($fluxVendeur['flux'])->sortBy(function($produit) {
-                // Vérifier si au moins un attribut est différent de 0
-                $hasNonZero = ($produit['quantite_trouvee'] ?? 0) > 0 ||
-                             ($produit['quantite_recue'] ?? 0) > 0 ||
-                             ($produit['quantite_retour'] ?? 0) > 0 ||
-                             ($produit['quantite_restante'] ?? 0) > 0;
-                
-                // Retourner 0 pour les produits avec activité (ils seront en premier)
-                // Retourner 1 pour les produits sans activité (ils seront en dernier)
-                return $hasNonZero ? 0 : 1;
-            })->values()->toArray();
-            
+        if (!$fluxVendeur) {
+            Log::info("Aucune plage opérationnelle valide pour le vendeur {$vendeur->name} ({$vendeur->id})");
+            return [
+                'flux' => [],
+                'resume' => [
+                    'total_ventes' => 0,
+                    'total_produits' => 0,
+                    'total_receptions' => 0,
+                    'date' => $dateCarbon->format('Y-m-d'),
+                ],
+            ];
+        }
+        
+        // Vérifier s'il y a de l'activité
+        $hasActivity = false;
+        foreach ($fluxVendeur['flux'] as $item) {
+            if (
+                ($item['quantite_trouvee']   ?? 0) > 0 ||
+                ($item['quantite_recue']     ?? 0) > 0 ||
+                ($item['quantite_retour']    ?? 0) > 0 ||
+                ($item['quantite_restante']  ?? 0) > 0 ||
+                ($item['quantite_vendue']    ?? 0) > 0
+            ) {
+                $hasActivity = true;
+                break;
+            }
+        }
+        
+        if (!$hasActivity) {
+            Log::info("Pas d'activité pour le vendeur {$vendeur->name}");
+            return [
+                'flux' => [],
+                'resume' => [
+                    'total_ventes' => 0,
+                    'total_produits' => 0,
+                    'total_receptions' => 0,
+                    'date' => $dateCarbon->format('Y-m-d'),
+                ],
+            ];
+        }
+        
+        // Retourner les données pour ce vendeur uniquement
+        $flux = [[
+            'vendeur' => [
+                'id'   => $vendeur->id,
+                'nom'  => $vendeur->name,
+                'role' => $vendeur->role,
+            ],
+            'produits'     => $fluxVendeur['flux'],
+            'total_ventes' => $fluxVendeur['total_ventes'],
+        ]];
+        
+        $totalReceptions = collect($fluxVendeur['flux'])->sum('quantite_recue');
+        
+        Log::info("Flux vendeur unique retourné", [
+            'vendeur' => $vendeur->name,
+            'total_ventes' => $fluxVendeur['total_ventes'],
+            'nb_produits' => count($fluxVendeur['flux']),
+        ]);
+        
+        return [
+            'flux' => $flux,
+            'resume' => [
+                'total_ventes' => round($fluxVendeur['total_ventes'], 2),
+                'total_produits' => count($fluxVendeur['flux']),
+                'total_receptions' => $totalReceptions,
+                'date' => $dateCarbon->format('Y-m-d'),
+            ],
+        ];
+    }
+
+    // Si aucun vendeur n'est spécifié, récupérer tous les vendeurs avec activité
+    Log::info("Aucun filtre vendeur - Récupération de tous les vendeurs avec activité");
+    
+    // 1. Récupérer les vendeurs concernés par des réceptions ce jour-là
+    $vendeursViaReceptions = ReceptionPointeur::whereDate('date_reception', $dateCarbon)
+        ->pluck('vendeur_assigne_id')
+        ->filter()
+        ->unique();
+
+    // 2. Récupérer les vendeurs qui ont un inventaire entrant ou sortant autour de cette date
+    $vendeursViaInventaires = Inventaire::where(function ($q) use ($dateCarbon) {
+            $q->whereDate('date_inventaire', $dateCarbon)
+              ->orWhereDate('date_inventaire', $dateCarbon->copy()->subDay())
+              ->orWhereDate('date_inventaire', $dateCarbon->copy()->addDay());
+        })
+        ->get()
+        ->flatMap(function ($inv) {
+            return [$inv->vendeur_entrant_id, $inv->vendeur_sortant_id];
+        })
+        ->filter()
+        ->unique();
+
+    // 3. Fusionner les deux sources + filtrer les vendeurs actifs
+    $vendeursIds = $vendeursViaReceptions
+        ->merge($vendeursViaInventaires)
+        ->unique()
+        ->values();
+
+    if ($vendeursIds->isEmpty()) {
+        Log::warning("Aucun vendeur trouvé via réceptions ou inventaires pour cette date");
+        return [
+            'flux' => [],
+            'resume' => [
+                'total_ventes' => 0,
+                'total_produits' => 0,
+                'total_receptions' => 0,
+                'date' => $dateCarbon->format('Y-m-d'),
+            ],
+        ];
+    }
+
+    // 4. Charger les vendeurs complets
+    $vendeurs = User::whereIn('id', $vendeursIds)
+        ->where('actif', true)
+        ->whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+        ->get();
+
+    Log::info("Vendeurs avec activité trouvés", [
+        'count' => $vendeurs->count(),
+        'ids'   => $vendeurs->pluck('id')->toArray()
+    ]);
+
+    $flux = [];
+    $totalVentes = 0;
+    $totalProduits = 0;
+    $totalReceptions = 0;
+
+    foreach ($vendeurs as $vendeur) {
+        $fluxVendeur = $this->getFluxParVendeur($vendeur->id, $dateCarbon, $produitId);
+
+        if (!$fluxVendeur) {
+            Log::info("Aucune plage opérationnelle valide pour vendeur {$vendeur->name} ({$vendeur->id})");
+            continue;
+        }
+
+        // Vérifier s'il y a vraiment de l'activité
+        $hasActivity = false;
+        foreach ($fluxVendeur['flux'] as $item) {
+            if (
+                ($item['quantite_trouvee']   ?? 0) > 0 ||
+                ($item['quantite_recue']     ?? 0) > 0 ||
+                ($item['quantite_retour']    ?? 0) > 0 ||
+                ($item['quantite_restante']  ?? 0) > 0 ||
+                ($item['quantite_vendue']    ?? 0) > 0
+            ) {
+                $hasActivity = true;
+                break;
+            }
+        }
+
+        if ($hasActivity) {
             $flux[] = [
+                'vendeur' => [
+                    'id'   => $vendeur->id,
+                    'nom'  => $vendeur->name,
+                    'role' => $vendeur->role,
+                ],
+                'produits'     => $fluxVendeur['flux'],
+                'total_ventes' => $fluxVendeur['total_ventes'],
+            ];
+
+            $totalVentes    += $fluxVendeur['total_ventes'];
+            $totalProduits  += count($fluxVendeur['flux']);
+            $totalReceptions += collect($fluxVendeur['flux'])->sum('quantite_recue');
+        }
+    }
+
+    return [
+        'flux' => $flux,
+        'resume' => [
+            'total_ventes'     => round($totalVentes, 2),
+            'total_produits'   => $totalProduits,
+            'total_receptions' => $totalReceptions,
+            'date'             => $dateCarbon->format('Y-m-d'),
+        ],
+    ];
+}
+    
+    
+    /**
+     * Récupère le stock initial d'un produit pour un vendeur à une date donnée
+     */
+     private function getStockInitial($vendeurId, $produitId, $date)
+    {
+        Log::info('getStockInitial', [
+            'vendeur_id' => $vendeurId,
+            'produit_id' => $produitId,
+            'date' => $date->toDateString()
+        ]);
+        
+        // Chercher l'inventaire de début de journée
+        $inventaire = Inventaire::whereDate('date_inventaire', $date)
+            ->where('vendeur_entrant_id', $vendeurId)
+            ->first();
+        
+        if ($inventaire) {
+            Log::info('Inventaire trouvé (jour même)', ['inventaire_id' => $inventaire->id]);
+            
+            $detail = \App\Models\InventaireDetail::where('inventaire_id', $inventaire->id)
+                ->where('produit_id', $produitId)
+                ->first();
+            
+            if ($detail) {
+                Log::info('Détail inventaire trouvé', [
+                    'quantite' => $detail->quantite_restante
+                ]);
+                return $detail->quantite_restante;
+            } else {
+                Log::info('Aucun détail inventaire pour ce produit');
+            }
+        } else {
+            Log::info('Aucun inventaire trouvé (jour même)');
+        }
+        
+        // Si pas d'inventaire, chercher l'inventaire de la veille
+        $dateVeille = Carbon::parse($date)->subDay();
+        $inventaireVeille = Inventaire::whereDate('date_inventaire', $dateVeille)
+            ->where('vendeur_sortant_id', $vendeurId)
+            ->first();
+        
+        if ($inventaireVeille) {
+            Log::info('Inventaire trouvé (veille)', [
+                'inventaire_id' => $inventaireVeille->id,
+                'date' => $dateVeille->toDateString()
+            ]);
+            
+            $detail = \App\Models\InventaireDetail::where('inventaire_id', $inventaireVeille->id)
+                ->where('produit_id', $produitId)
+                ->first();
+            
+            if ($detail) {
+                Log::info('Détail inventaire trouvé (veille)', [
+                    'quantite' => $detail->quantite_restante
+                ]);
+                return $detail->quantite_restante;
+            } else {
+                Log::info('Aucun détail inventaire pour ce produit (veille)');
+            }
+        } else {
+            Log::info('Aucun inventaire trouvé (veille)');
+        }
+        
+        Log::info('Stock initial = 0 (aucun inventaire trouvé)');
+        return 0;
+    }
+    
+    /**
+     * Récupère les statistiques globales
+     */
+    public function getStatistiques($dateDebut = null, $dateFin = null)
+    {
+        if (!$dateDebut) {
+            $dateDebut = Carbon::now()->startOfMonth();
+        } else {
+            $dateDebut = Carbon::parse($dateDebut);
+        }
+        
+        if (!$dateFin) {
+            $dateFin = Carbon::now();
+        } else {
+            $dateFin = Carbon::parse($dateFin);
+        }
+        
+        $ventes = Vente::whereBetween('date_vente', [$dateDebut, $dateFin])->get();
+        
+        $totalVentes = $ventes->sum('montant_total');
+        $totalQuantite = $ventes->sum('quantite');
+        $nombreVentes = $ventes->count();
+        
+        return [
+            'total_ventes' => $totalVentes,
+            'total_quantite' => $totalQuantite,
+            'nombre_ventes' => $nombreVentes,
+            'periode' => [
+                'debut' => $dateDebut->format('Y-m-d'),
+                'fin' => $dateFin->format('Y-m-d'),
+            ],
+        ];
+    }
+    
+    /**
+     * Récupère la performance des vendeurs
+     */
+    public function getVendeursPerformance($dateDebut = null, $dateFin = null)
+    {
+        if (!$dateDebut) {
+            $dateDebut = Carbon::now()->startOfMonth();
+        } else {
+            $dateDebut = Carbon::parse($dateDebut);
+        }
+        
+        if (!$dateFin) {
+            $dateFin = Carbon::now();
+        } else {
+            $dateFin = Carbon::parse($dateFin);
+        }
+        
+        $vendeurs = User::whereIn('role', ['vendeur_boulangerie', 'vendeur_patisserie'])
+            ->where('actif', true)
+            ->get();
+        
+        $performances = [];
+        
+        foreach ($vendeurs as $vendeur) {
+            $ventes = Vente::whereHas('sessionVente', function($q) use ($vendeur, $dateDebut, $dateFin) {
+                $q->where('vendeur_id', $vendeur->id)
+                  ->whereBetween('date_ouverture', [$dateDebut, $dateFin]);
+            })->get();
+            
+            $sessions = SessionVente::where('vendeur_id', $vendeur->id)
+                ->whereBetween('date_ouverture', [$dateDebut, $dateFin])
+                ->get();
+            
+            $performances[] = [
                 'vendeur' => [
                     'id' => $vendeur->id,
                     'nom' => $vendeur->name,
                     'role' => $vendeur->role,
                 ],
-                'periode' => $fluxVendeur['periode'],
-                'produits' => $produitsTries,
-                'total_ventes' => $fluxVendeur['total_ventes'],
+                'total_ventes' => $ventes->sum('montant_total'),
+                'total_quantite' => $ventes->sum('quantite'),
+                'nombre_sessions' => $sessions->count(),
+                'moyenne_par_session' => $sessions->count() > 0 
+                    ? $ventes->sum('montant_total') / $sessions->count() 
+                    : 0,
             ];
-        } else {
-            Log::info("Vendeur {$vendeur->name} n'a aucune activité pour cette date");
         }
+        
+        // Trier par total de ventes
+        usort($performances, function($a, $b) {
+            return $b['total_ventes'] <=> $a['total_ventes'];
+        });
+        
+        return $performances;
     }
-    
-    Log::info("Nombre de vendeurs avec activité: " . count($flux));
-    
-    return [
-        'date' => $date,
-        'flux' => $flux,
-        'resume' => $this->getResumeFlux($flux),
-    ];
-}
 
 /**
  * Obtenir le flux par vendeur
@@ -239,8 +786,7 @@ public function getFluxParVendeur($vendeurId, $date = null, $produitId = null)
     // Vérifier que la période ne dépasse pas 24h
     $dureeHeures = $dateDebut->diffInHours($dateFin);
     if ($dureeHeures > 24) {
-        Log::warning("Période opérationnelle dépasse 24h ({$dureeHeures}h) - Inventaires incohérents");
-        return null;
+        Log::warning("Période opérationnelle dépasse 24h ({$dureeHeures}h) - Inventaires Potentiellement incohérents");
     }
     
     Log::info("Période opérationnelle valide: de {$dateDebut} à {$dateFin} ({$dureeHeures}h)");
@@ -420,6 +966,7 @@ private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut
             return $inventaire;
         } else {
             Log::warning("Inventaire sortant sur J mais incohérent avec l'inventaire entrant (dates différentes)");
+            return $inventaire;
         }
     }
     
@@ -458,13 +1005,11 @@ private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut
     
     if ($diffJours > 1) {
         Log::warning("Inventaire sortant sur J+1 mais trop éloigné de l'inventaire entrant ({$diffJours} jours)");
-        return null;
     }
     
     // Vérifier que l'inventaire de début est bien J-1 si on utilise un inventaire de fin sur J+1
     if (!$dateDebutInventaire->isSameDay($date->copy()->subDay()) && !$dateDebutInventaire->isSameDay($date)) {
         Log::warning("Inventaire sortant sur J+1 mais inventaire entrant non cohérent");
-        return null;
     }
     
     Log::info("Inventaire sortant trouvé sur J+1 ({$dateLendemain->toDateString()}) et non ouvert - Valide pour J");
@@ -565,16 +1110,24 @@ private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut
     /**
      * Calculer les ventes totales d'une session
      */
-    private function calculerVentesSession(SessionVente $session)
+        private function calculerVentesSession(SessionVente $session)
     {
-        $details = $this->getDetailsVentesSession($session);
-        return array_sum(array_column($details, 'montant_vendu'));
+        try {
+            $details = $this->getDetailsVentesSession($session);
+            return array_sum(array_column($details, 'montant_vendu'));
+        } catch (\Exception $e) {
+            Log::error('Erreur calculerVentesSession', [
+                'session_id' => $session->id,
+                'error' => $e->getMessage()
+            ]);
+            return 0;
+        }
     }
 
     /**
      * Formater une session de vente
      */
-    private function formatSessionVente(SessionVente $session)
+        private function formatSessionVente(SessionVente $session)
     {
         return [
             'id' => $session->id,
@@ -597,28 +1150,7 @@ private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut
         ];
     }
 
-    /**
-     * Méthodes helpers pour les calculs de stock
-     */
-    private function getStockInitial($vendeurId, $produitId, $dateDebut)
-    {
-        $inventaire = Inventaire::where('vendeur_entrant_id', $vendeurId)
-            ->where('valide_entrant', true)
-            ->where('date_inventaire', '<=', $dateDebut)
-            ->orderBy('date_inventaire', 'desc')
-            ->first();
-
-        if (!$inventaire) {
-            return 0;
-        }
-
-        $detail = DB::table('inventaire_details')
-            ->where('inventaire_id', $inventaire->id)
-            ->where('produit_id', $produitId)
-            ->first();
-
-        return $detail ? $detail->quantite_restante : 0;
-    }
+    
 
     private function getEntrees($vendeurId, $produitId, $dateDebut, $dateFin)
     {
@@ -659,7 +1191,7 @@ private function trouverInventaireFin($vendeurId, Carbon $date, $inventaireDebut
     /**
      * Obtenir le statut d'un inventaire
      */
-    private function getStatutInventaire(Inventaire $inventaire)
+     private function getStatutInventaire(Inventaire $inventaire)
     {
         if ($inventaire->valide_sortant && $inventaire->valide_entrant) {
             return 'Validé';

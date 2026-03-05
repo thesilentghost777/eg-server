@@ -443,94 +443,107 @@ class SyncApiController extends Controller
      * Synchroniser un inventaire
      */
     private function syncInventaire($data, $clientId)
-    {
-        try {
-            \Log::info('[SYNC INVENTAIRE] Début', [
-                'client_id' => $clientId,
-                'local_id' => $data['local_id'] ?? null,
-                'id' => $data['id'] ?? null
-            ]);
+{
+    try {
+        \Log::info('[SYNC INVENTAIRE] Début', [
+            'client_id' => $clientId,
+            'local_id'  => $data['local_id'] ?? null,
+            'id'        => $data['id'] ?? null,
+        ]);
 
-            // Récupération du vendeur sortant pour déterminer la catégorie
-            $vendeurSortant = DB::table('users')->find($data['vendeur_sortant_id'] ?? null);
-            
-            if (!$vendeurSortant) {
-                \Log::error('[SYNC INVENTAIRE] Vendeur sortant introuvable', [
-                    'vendeur_sortant_id' => $data['vendeur_sortant_id'] ?? null
-                ]);
-                return ['success' => false, 'reason' => 'Vendeur sortant introuvable'];
-            }
-
-            // Détermination de la catégorie
-            $categorie = ($vendeurSortant->role === 'vendeur_patisserie') ? 'patisserie' : 'boulangerie';
-            
-            \Log::debug('[SYNC INVENTAIRE] Catégorie déterminée', [
-                'role_vendeur' => $vendeurSortant->role,
-                'categorie' => $categorie
-            ]);
-
-            // Construction des données
-            $commonData = [
+        // Validation des vendeurs
+        $vendeurSortant = DB::table('users')->find($data['vendeur_sortant_id'] ?? null);
+        if (!$vendeurSortant) {
+            \Log::error('[SYNC INVENTAIRE] Vendeur sortant introuvable', [
                 'vendeur_sortant_id' => $data['vendeur_sortant_id'] ?? null,
-                'vendeur_entrant_id' => $data['vendeur_entrant_id'] ?? null,
-                'categorie'          => $categorie,
-                'valide_sortant'     => true,
-                'valide_entrant'     => true,
-                'date_inventaire'    => now(),
-            ];
+            ]);
+            return ['success' => false, 'reason' => 'Vendeur sortant introuvable'];
+        }
 
-            // Mise à jour si ID existant
-            if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
-                \Log::info('[SYNC INVENTAIRE] Tentative de mise à jour', ['id' => $data['id']]);
+        $categorie = ($vendeurSortant->role === 'vendeur_patisserie') ? 'patisserie' : 'boulangerie';
 
-                $existing = DB::table('inventaires')->find($data['id']);
+        $commonData = [
+            'vendeur_sortant_id' => $data['vendeur_sortant_id'] ?? null,
+            'vendeur_entrant_id' => $data['vendeur_entrant_id'] ?? null,
+            'categorie'          => $categorie,
+            'valide_sortant'     => true,
+            'valide_entrant'     => true,
+            'date_inventaire'    => now(),
+        ];
 
-                if ($existing) {
-                    $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
-                    if (!in_array($clientId, $syncedClients)) {
-                        $syncedClients[] = $clientId;
-                    }
+        // ── CAS 1 : l'id reçu est un vrai server_id (sync suivante après correction JS) ──
+        if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
+            $existing = DB::table('inventaires')->find($data['id']);
 
-                    $commonData['synced_clients'] = json_encode($syncedClients);
-                    $commonData['updated_at'] = now();
+            if ($existing) {
+                \Log::info('[SYNC INVENTAIRE] Mise à jour enregistrement existant', ['id' => $data['id']]);
 
-                    DB::table('inventaires')->where('id', $data['id'])->update($commonData);
-                    
-                    \Log::info('[SYNC INVENTAIRE] ✅ Mise à jour réussie', [
-                        'id' => $data['id'],
-                        'client_id' => $clientId
-                    ]);
-
-                    return ['success' => true, 'id' => $data['id']];
+                $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
+                if (!in_array($clientId, $syncedClients)) {
+                    $syncedClients[] = $clientId;
                 }
+
+                $commonData['synced_clients'] = json_encode($syncedClients);
+                $commonData['updated_at']     = now();
+
+                DB::table('inventaires')->where('id', $data['id'])->update($commonData);
+
+                \Log::info('[SYNC INVENTAIRE] ✅ Mise à jour réussie', ['id' => $data['id']]);
+                return ['success' => true, 'id' => $data['id']];
             }
 
-            // Création nouveau
-            $commonData['synced_clients'] = json_encode([$clientId]);
-            $commonData['created_at'] = now();
-            $commonData['updated_at'] = now();
-
-            \Log::info('[SYNC INVENTAIRE] Création nouveau', $commonData);
-
-            $id = DB::table('inventaires')->insertGetId($commonData);
-
-            \Log::info('[SYNC INVENTAIRE] ✅ Création réussie', [
-                'id' => $id,
-                'client_id' => $clientId,
-                'local_id' => $data['local_id'] ?? null
+            // Si l'id n'existe pas sur le serveur, c'est un id IndexedDB local → on tombe
+            // dans le cas 2 ci-dessous (création avec filet anti-doublon).
+            \Log::warning('[SYNC INVENTAIRE] ID non trouvé sur le serveur (probablement un id IndexedDB local)', [
+                'id_reçu' => $data['id'],
             ]);
-
-            return ['success' => true, 'id' => $id];
-
-        } catch (\Exception $e) {
-            \Log::error('[SYNC INVENTAIRE] Exception', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return ['success' => false, 'reason' => $e->getMessage()];
         }
+
+        // ── CAS 2 : filet anti-doublon ──────────────────────────────────────────────────
+        // Avant de créer, on vérifie qu'on n'a pas déjà un inventaire de ce client
+        // pour les mêmes vendeurs dans les dernières 24h. Cela empêche la création
+        // de doublons vides quand le mobile renvoie un inventaire avec son id local.
+        $recentDuplicate = DB::table('inventaires')
+            ->where('vendeur_sortant_id', $data['vendeur_sortant_id'])
+            ->where('vendeur_entrant_id', $data['vendeur_entrant_id'])
+            ->whereRaw("JSON_CONTAINS(synced_clients, '\"" . addslashes($clientId) . "\"')")
+            ->where('created_at', '>=', now()->subHours(24))
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($recentDuplicate) {
+            \Log::info('[SYNC INVENTAIRE] Doublon détecté – retour de l\'inventaire existant', [
+                'id'        => $recentDuplicate->id,
+                'client_id' => $clientId,
+            ]);
+            return ['success' => true, 'id' => $recentDuplicate->id];
+        }
+
+        // ── CAS 3 : création ────────────────────────────────────────────────────────────
+        $commonData['synced_clients'] = json_encode([$clientId]);
+        $commonData['created_at']     = now();
+        $commonData['updated_at']     = now();
+
+        \Log::info('[SYNC INVENTAIRE] Création nouvel inventaire', $commonData);
+
+        $id = DB::table('inventaires')->insertGetId($commonData);
+
+        \Log::info('[SYNC INVENTAIRE] ✅ Création réussie', [
+            'id'        => $id,
+            'client_id' => $clientId,
+            'local_id'  => $data['local_id'] ?? null,
+        ]);
+
+        return ['success' => true, 'id' => $id];
+
+    } catch (\Exception $e) {
+        \Log::error('[SYNC INVENTAIRE] Exception', [
+            'message' => $e->getMessage(),
+            'trace'   => $e->getTraceAsString(),
+        ]);
+        return ['success' => false, 'reason' => $e->getMessage()];
     }
+}
 
     /**
      * Synchroniser un détail d'inventaire

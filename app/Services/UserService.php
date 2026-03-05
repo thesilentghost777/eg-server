@@ -38,27 +38,42 @@ class UserService
     }
 
     public function updateUser($id, array $data)
-    {
-        $user = User::findOrFail($id);
-        $updateData = [];
-        
-        if (isset($data['nom'])) {
-            $updateData['name'] = $data['nom'];
-        }
-        if (isset($data['numero_telephone'])) {
-            $updateData['numero_telephone'] = $data['numero_telephone'];
-        }
-        if (isset($data['code_pin'])) {
-            $updateData['code_pin'] = $data['code_pin'];
-        }
-        if (isset($data['preferred_language'])) {
-            $updateData['preferred_language'] = $data['preferred_language'];
-        }
-        
-        $user->update($updateData);
-        return $user;
+{
+    $user = User::findOrFail($id);
+
+    $updateData = [];
+
+    if (array_key_exists('nom', $data)) {
+        $updateData['name'] = $data['nom'];
     }
 
+    if (array_key_exists('numero_telephone', $data)) {
+        $updateData['numero_telephone'] = $data['numero_telephone'];
+    }
+
+    // ✅ AJOUTEZ CECI
+    if (array_key_exists('role', $data)) {
+        $updateData['role'] = $data['role'];
+    }
+
+    if (!empty($data['code_pin'])) {
+        $updateData['code_pin'] = Hash::make($data['code_pin']);
+    }
+
+    if (array_key_exists('actif', $data)) {
+        $updateData['actif'] = filter_var($data['actif'], FILTER_VALIDATE_BOOLEAN);
+    }
+
+    if (array_key_exists('preferred_language', $data)) {
+        $updateData['preferred_language'] = $data['preferred_language'];
+    }
+
+    if (!empty($updateData)) {
+        $user->update($updateData);
+    }
+
+    return $user->fresh();
+}
     public function toggleActif($id)
     {
         $user = User::findOrFail($id);

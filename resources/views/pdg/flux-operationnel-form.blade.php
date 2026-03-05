@@ -46,9 +46,17 @@
                         <option value="">{{ $isFrench ? '-- Tous les vendeurs --' : '-- All sellers --' }}</option>
                         @foreach($vendeurs as $vendeur)
                             <option value="{{ $vendeur->id }}" {{ request('vendeur_id') == $vendeur->id ? 'selected' : '' }}>
-                                {{ $vendeur->nom }} 
+                                {{-- ✅ CORRECTION: Utiliser 'name' au lieu de 'nom' --}}
+                                {{ $vendeur->name }} 
                                 <span class="text-gray-500">
-                                    ({{ $vendeur->role == 'Serveur' ? ($isFrench ? 'Serveur' : 'Server') : $vendeur->role }})
+                                    {{-- ✅ CORRECTION: Formatter le rôle correctement --}}
+                                    @if($vendeur->role == 'vendeur_boulangerie')
+                                        ({{ $isFrench ? 'Vendeur Boulangerie' : 'Bakery Seller' }})
+                                    @elseif($vendeur->role == 'vendeur_patisserie')
+                                        ({{ $isFrench ? 'Vendeur Pâtisserie' : 'Pastry Seller' }})
+                                    @else
+                                        ({{ ucfirst(str_replace('_', ' ', $vendeur->role)) }})
+                                    @endif
                                 </span>
                             </option>
                         @endforeach
@@ -73,7 +81,8 @@
                             <option value="{{ $produit->id }}" {{ request('produit_id') == $produit->id ? 'selected' : '' }}>
                                 {{ $produit->nom }} 
                                 <span class="text-gray-500">
-                                    ({{ number_format($produit->prix, 2) }} €)
+                                    {{-- ✅ CORRECTION: Afficher le prix en FCFA au lieu de € --}}
+                                    ({{ number_format($produit->prix, 0, ',', ' ') }} FCFA)
                                 </span>
                             </option>
                         @endforeach
@@ -89,12 +98,14 @@
                         type="submit" 
                         class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md"
                     >
+                        <i class="fas fa-chart-line mr-2"></i>
                         {{ $isFrench ? 'Générer le Flux Opérationnel' : 'Generate Operational Flow' }}
                     </button>
                     <a 
                         href="{{ route('pdg.dashboard') }}" 
                         class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition duration-200 text-center"
                     >
+                        <i class="fas fa-times mr-2"></i>
                         {{ $isFrench ? 'Annuler' : 'Cancel' }}
                     </a>
                 </div>
@@ -102,14 +113,63 @@
 
             <!-- Informations supplémentaires -->
             <div class="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h3 class="text-sm font-semibold text-blue-800 mb-2">ℹ️ {{ $isFrench ? 'Informations' : 'Information' }}</h3>
+                <h3 class="text-sm font-semibold text-blue-800 mb-2">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    {{ $isFrench ? 'Informations' : 'Information' }}
+                </h3>
                 <ul class="text-sm text-blue-700 space-y-1">
                     <li>• {{ $isFrench ? 'La date est obligatoire pour générer le rapport' : 'Date is required to generate the report' }}</li>
                     <li>• {{ $isFrench ? 'Les filtres vendeur et produit sont optionnels' : 'Seller and product filters are optional' }}</li>
                     <li>• {{ $isFrench ? 'Sans filtre, le rapport affichera toutes les opérations de la journée' : 'Without filters, the report will show all operations for the day' }}</li>
                 </ul>
             </div>
+
+            {{-- Section de raccourcis rapides --}}
+            <div class="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3">
+                <button 
+                    type="button" 
+                    onclick="setToday()"
+                    class="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg transition duration-200 text-sm font-medium"
+                >
+                    <i class="fas fa-calendar-day mr-1"></i>
+                    {{ $isFrench ? 'Aujourd\'hui' : 'Today' }}
+                </button>
+                <button 
+                    type="button" 
+                    onclick="setYesterday()"
+                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg transition duration-200 text-sm font-medium"
+                >
+                    <i class="fas fa-calendar-minus mr-1"></i>
+                    {{ $isFrench ? 'Hier' : 'Yesterday' }}
+                </button>
+                <button 
+                    type="button" 
+                    onclick="setLastWeek()"
+                    class="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg transition duration-200 text-sm font-medium"
+                >
+                    <i class="fas fa-calendar-week mr-1"></i>
+                    {{ $isFrench ? 'Il y a 7 jours' : '7 days ago' }}
+                </button>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+function setToday() {
+    document.getElementById('date').value = new Date().toISOString().split('T')[0];
+}
+
+function setYesterday() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    document.getElementById('date').value = yesterday.toISOString().split('T')[0];
+}
+
+function setLastWeek() {
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    document.getElementById('date').value = lastWeek.toISOString().split('T')[0];
+}
+</script>
 @endsection

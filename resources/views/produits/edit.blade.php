@@ -44,7 +44,7 @@
 
         <!-- Formulaire -->
         <div class="bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-blue-600">
-            <form action="{{ route('produits.update', $produit->id) }}" method="POST" x-data="formHandler()" @submit.prevent="submitForm">
+            <form id="editProductForm" action="{{ route('produits.update', $produit->id) }}" method="POST">
                 @csrf
                 @method('PUT')
                 
@@ -228,60 +228,66 @@
 </div>
 
 <script>
-function formHandler() {
-    return {
-        submitForm(e) {
-            const form = e.target;
-            const formData = new FormData(form);
-            const isFrench = {{ $isFrench ? 'true' : 'false' }};
-            
-            Swal.fire({
-                title: isFrench ? 'Modification en cours...' : 'Updating...',
-                text: isFrench ? 'Veuillez patienter' : 'Please wait',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-            
-            fetch(form.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: isFrench ? 'Succès!' : 'Success!',
-                        text: data.message,
-                        confirmButtonColor: '#2563eb'
-                    }).then(() => {
-                        window.location.href = '{{ route("produits.index") }}';
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: isFrench ? 'Erreur!' : 'Error!',
-                        text: data.message || (isFrench ? 'Une erreur est survenue' : 'An error occurred'),
-                        confirmButtonColor: '#2563eb'
-                    });
-                }
-            })
-            .catch(error => {
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('editProductForm');
+    const isFrench = {{ $isFrench ? 'true' : 'false' }};
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Afficher le loader
+        Swal.fire({
+            title: isFrench ? 'Modification en cours...' : 'Updating...',
+            text: isFrench ? 'Veuillez patienter' : 'Please wait',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Préparer les données du formulaire
+        const formData = new FormData(form);
+        
+        // ✅ CORRECTION: Envoyer les données avec fetch en mode form
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: isFrench ? 'Succès!' : 'Success!',
+                    text: data.message,
+                    confirmButtonColor: '#2563eb'
+                }).then(() => {
+                    window.location.href = '{{ route("produits.index") }}';
+                });
+            } else {
                 Swal.fire({
                     icon: 'error',
                     title: isFrench ? 'Erreur!' : 'Error!',
-                    text: isFrench ? 'Erreur de connexion' : 'Connection error',
+                    text: data.message || (isFrench ? 'Une erreur est survenue' : 'An error occurred'),
                     confirmButtonColor: '#2563eb'
                 });
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            Swal.fire({
+                icon: 'error',
+                title: isFrench ? 'Erreur!' : 'Error!',
+                text: isFrench ? 'Erreur de connexion' : 'Connection error',
+                confirmButtonColor: '#2563eb'
             });
-        }
-    }
-}
+        });
+    });
+});
 
 function deleteProduit() {
     const isFrench = {{ $isFrench ? 'true' : 'false' }};
@@ -296,11 +302,12 @@ function deleteProduit() {
         cancelButtonText: isFrench ? 'Annuler' : 'Cancel'
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch('/api/produits/{{ $produit->id }}', {
+            fetch('{{ route("produits.destroy", $produit->id) }}', {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
                 }
             })
             .then(response => response.json())
@@ -315,6 +322,14 @@ function deleteProduit() {
                         window.location.href = '{{ route("produits.index") }}';
                     });
                 }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: isFrench ? 'Erreur!' : 'Error!',
+                    text: isFrench ? 'Erreur de suppression' : 'Delete error',
+                    confirmButtonColor: '#2563eb'
+                });
             });
         }
     });

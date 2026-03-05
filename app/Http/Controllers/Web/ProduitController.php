@@ -146,53 +146,42 @@ class ProduitController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        try {
-            $validated = $request->validate([
-                'nom' => 'required|string|max:255',
-                'prix' => 'required|numeric|min:0',
-                'categorie' => 'required|in:boulangerie,patisserie',
-                'actif' => 'boolean',
+{
+    $validated = $request->validate([
+        'nom'       => 'required|string|max:255',
+        'prix'      => 'required|numeric|min:0',
+        'categorie' => 'required|in:boulangerie,patisserie',
+        'actif'     => 'sometimes|boolean',
+    ]);
+
+    try {
+        $produit = $this->produitService->updateProduit($id, $validated);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit modifié avec succès',
+                'data'    => $produit
             ]);
-
-            $produit = $this->produitService->updateProduit($id, $validated);
-            
-            $isFrench = true;
-            
-            // Si c'est une requête AJAX, retourner JSON
-            if ($request->expectsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => $isFrench 
-                        ? 'Produit modifié avec succès' 
-                        : 'Product updated successfully',
-                    'data' => $produit
-                ]);
-            }
-            
-            // Sinon, redirection classique
-            return redirect()->route('produits.index')->with('success', 'Produit modifié avec succès');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            if ($request->expectsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Erreur de validation.',
-                    'errors' => $e->errors()
-                ], 422);
-            }
-            return back()->withInput()->withErrors($e->errors());
-        } catch (\Exception $e) {
-            if ($request->expectsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ], 500);
-            }
-            return back()->withInput()->with('error', $e->getMessage());
         }
-    }
 
-    // ✅ CORRECTION: Retourner du JSON au lieu d'une redirection
+        return redirect()->route('produits.index')
+            ->with('success', 'Produit modifié avec succès');
+
+    } catch (\Exception $e) {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+        }
+
+        return back()
+            ->withInput()
+            ->withErrors(['error' => $e->getMessage()]);
+    }
+}
+
     public function toggleActif($id)
     {
         try {
@@ -215,7 +204,6 @@ class ProduitController extends Controller
         }
     }
 
-    // ✅ CORRECTION: Retourner du JSON au lieu d'une redirection
     public function destroy($id)
     {
         try {

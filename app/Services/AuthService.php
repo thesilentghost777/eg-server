@@ -102,6 +102,51 @@ class AuthService
             throw $e;
         }
     }
+    /**
+ * Inscription depuis la vue Blade (sans client_id)
+ */
+public function inscription2(array $data)
+{
+    DB::beginTransaction();
+    try {
+        // Vérifier le code PDG si nécessaire
+        if ($data['role'] === 'pdg') {
+            $configPdg = DB::table('config_pdg')->first();
+            if (!$configPdg || $data['code_pdg'] !== $configPdg->code_inscription_pdg) {
+                throw new \Exception("Code PDG incorrect");
+            }
+        }
+
+        // Nettoyer le numéro de téléphone
+        $numeroTelephone = $data['numero_telephone'];
+        if (str_starts_with($numeroTelephone, '237')) {
+            $numeroTelephone = substr($numeroTelephone, 3);
+        }
+
+        if (strlen($numeroTelephone) !== 9 || !ctype_digit($numeroTelephone)) {
+            throw new \Exception("Le numéro doit contenir 9 chiffres");
+        }
+
+        // Créer l'utilisateur sans client_id (inscription web)
+        $user = User::create([
+            'name'               => $data['name'],
+            'numero_telephone'   => $numeroTelephone,
+            'role'               => $data['role'],
+            'code_pin'           => Hash::make($data['code_pin']),
+            'preferred_language' => $data['preferred_language'] ?? 'fr',
+            'actif'              => true,
+            'synced_clients'     => json_encode([]) // vide, pas d'app mobile
+        ]);
+
+        DB::commit();
+
+        return $user;
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
+    }
+}
 
     /**
      * Créer un nouveau client

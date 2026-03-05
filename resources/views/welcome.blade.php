@@ -104,7 +104,7 @@
                         </a>
                     </div>
 
-                    <!-- Stats -->
+                    <!-- Key Highlights (factual, non-statistical) -->
                     <div class="grid grid-cols-3 gap-4 pt-8 border-t border-gray-200">
                         <div class="text-center">
                             <div class="text-2xl md:text-3xl font-bold text-amber-600">100%</div>
@@ -140,24 +140,24 @@
                                             <div class="w-2 h-2 bg-white/50 rounded-full"></div>
                                         </div>
                                     </div>
-                                    <div class="text-3xl font-bold mb-2">
+                                    <div class="text-3xl font-bold mb-3">
                                         <i class="fas fa-chart-line mr-2"></i>
-                                        <span class="counter">2,450</span>
+                                        {{ $isFrench ? 'Vue en temps réel' : 'Real-time view' }}
                                     </div>
-                                    <div class="text-sm opacity-90">{{ $isFrench ? 'Produits gérés aujourd\'hui' : 'Products managed today' }}</div>
+                                    <div class="text-sm opacity-90">{{ $isFrench ? 'Suivi complet de votre activité' : 'Complete activity tracking' }}</div>
                                 </div>
 
-                                <!-- Quick Stats -->
+                                <!-- Feature Highlights -->
                                 <div class="grid grid-cols-2 gap-4">
                                     <div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
                                         <i class="fas fa-users text-blue-600 text-2xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-blue-900">3</div>
-                                        <div class="text-xs text-blue-700">{{ $isFrench ? 'Vendeurs actifs' : 'Active sellers' }}</div>
+                                        <div class="font-bold text-blue-900 text-sm">{{ $isFrench ? 'Multi-rôles' : 'Multi-roles' }}</div>
+                                        <div class="text-xs text-blue-700">{{ $isFrench ? 'PDG, Pointeur, Vendeur' : 'CEO, Pointer, Seller' }}</div>
                                     </div>
                                     <div class="bg-green-50 rounded-xl p-4 border border-green-100">
-                                        <i class="fas fa-box text-green-600 text-2xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-green-900">98%</div>
-                                        <div class="text-xs text-green-700">{{ $isFrench ? 'Précision' : 'Accuracy' }}</div>
+                                        <i class="fas fa-wifi text-green-600 text-2xl mb-2"></i>
+                                        <div class="font-bold text-green-900 text-sm">{{ $isFrench ? 'Hors ligne' : 'Offline' }}</div>
+                                        <div class="text-xs text-green-700">{{ $isFrench ? 'Sans Internet' : 'No Internet needed' }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -384,133 +384,46 @@
                     </div>
                 </div>
 
-                <!-- Right Content - Stats Cards -->
+                <!-- Right Content - Feature Cards (no fake stats) -->
                 <div class="grid grid-cols-2 gap-6">
                     <div class="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-2xl text-white shadow-xl col-span-2">
-                        <i class="fas fa-chart-line text-4xl mb-4 opacity-90"></i>
-                        <div class="text-4xl font-bold mb-2">+85%</div>
-                        <div class="text-amber-100">
-                            {{ $isFrench ? 'Efficacité opérationnelle' : 'Operational efficiency' }}
+                        <i class="fas fa-network-wired text-4xl mb-4 opacity-90"></i>
+                        <div class="text-xl font-bold mb-2">
+                            {{ $isFrench ? 'Réseau local, zéro cloud' : 'Local network, zero cloud' }}
+                        </div>
+                        <div class="text-amber-100 text-sm">
+                            {{ $isFrench 
+                                ? 'Vos données restent sur votre infrastructure. Aucune donnée sensible n\'est transmise à l\'extérieur.'
+                                : 'Your data stays on your infrastructure. No sensitive data is sent outside.'
+                            }}
                         </div>
                     </div>
 
                     <div class="bg-white p-6 rounded-2xl shadow-lg border-2 border-blue-100">
-                        <i class="fas fa-clock text-3xl text-blue-600 mb-4"></i>
-                        <div class="text-3xl font-bold text-gray-900 mb-2">-60%</div>
-                        <div class="text-sm text-gray-600">
-                            {{ $isFrench ? 'Temps de gestion' : 'Management time' }}
+                        <i class="fas fa-exchange-alt text-3xl text-blue-600 mb-4"></i>
+                        <div class="font-bold text-gray-900 mb-1 text-sm">
+                            {{ $isFrench ? 'Changement de vendeur' : 'Seller handover' }}
+                        </div>
+                        <div class="text-xs text-gray-600">
+                            {{ $isFrench ? 'Double validation PIN sécurisée' : 'Secure double PIN validation' }}
                         </div>
                     </div>
 
                     <div class="bg-white p-6 rounded-2xl shadow-lg border-2 border-green-100">
-                        <i class="fas fa-check-circle text-3xl text-green-600 mb-4"></i>
-                        <div class="text-3xl font-bold text-gray-900 mb-2">99%</div>
-                        <div class="text-sm text-gray-600">
-                            {{ $isFrench ? 'Précision' : 'Accuracy' }}
+                        <i class="fas fa-money-bill-wave text-3xl text-green-600 mb-4"></i>
+                        <div class="font-bold text-gray-900 mb-1 text-sm">
+                            {{ $isFrench ? 'Multi-paiements' : 'Multi-payment' }}
+                        </div>
+                        <div class="text-xs text-gray-600">
+                            {{ $isFrench ? 'Cash, Orange Money, MTN Money' : 'Cash, Orange Money, MTN Money' }}
                         </div>
                     </div>
-
-                    
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Workflow Section -->
-    <section id="workflow" class="py-16 md:py-24 px-4 sm:px-6 lg:px-8 bg-white">
-        <div class="container mx-auto">
-            <div class="text-center mb-12 md:mb-16">
-                <div class="inline-block px-4 py-2 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold mb-4">
-                    <i class="fas fa-project-diagram mr-2"></i>
-                    {{ $isFrench ? 'Flux de travail' : 'Workflow' }}
-                </div>
-                <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-                    {{ $isFrench ? 'Comment ça fonctionne ?' : 'How does it work?' }}
-                </h2>
-                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-                    {{ $isFrench 
-                        ? 'Un flux de travail simple et efficace pour gérer votre boulangerie au quotidien'
-                        : 'A simple and efficient workflow to manage your bakery daily'
-                    }}
-                </p>
-            </div>
-
-            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-                <!-- Step 1 -->
-                <div class="relative">
-                    <div class="bg-gradient-to-br from-amber-50 to-white p-6 rounded-2xl border-2 border-amber-200 hover:shadow-xl transition-shadow">
-                        <div class="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl">
-                            1
-                        </div>
-                        <h3 class="text-lg font-bold text-gray-900 mb-2">
-                            {{ $isFrench ? 'Réception' : 'Reception' }}
-                        </h3>
-                        <p class="text-sm text-gray-600">
-                            {{ $isFrench 
-                                ? 'Le pointeur enregistre les produits reçus et les affecte aux vendeurs'
-                                : 'Pointer records received products and assigns them to sellers'
-                            }}
-                        </p>
-                    </div>
-                    <div class="hidden lg:block absolute top-1/2 -right-4 w-8 h-0.5 bg-gradient-to-r from-amber-300 to-blue-300"></div>
-                </div>
-
-                <!-- Step 2 -->
-                <div class="relative">
-                    <div class="bg-gradient-to-br from-blue-50 to-white p-6 rounded-2xl border-2 border-blue-200 hover:shadow-xl transition-shadow">
-                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl">
-                            2
-                        </div>
-                        <h3 class="text-lg font-bold text-gray-900 mb-2">
-                            {{ $isFrench ? 'Vente' : 'Sale' }}
-                        </h3>
-                        <p class="text-sm text-gray-600">
-                            {{ $isFrench 
-                                ? 'Les vendeurs gèrent les sessions de vente avec différents modes de paiement'
-                                : 'Sellers manage sales sessions with different payment methods'
-                            }}
-                        </p>
-                    </div>
-                    <div class="hidden lg:block absolute top-1/2 -right-4 w-8 h-0.5 bg-gradient-to-r from-blue-300 to-green-300"></div>
-                </div>
-
-                <!-- Step 3 -->
-                <div class="relative">
-                    <div class="bg-gradient-to-br from-green-50 to-white p-6 rounded-2xl border-2 border-green-200 hover:shadow-xl transition-shadow">
-                        <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl">
-                            3
-                        </div>
-                        <h3 class="text-lg font-bold text-gray-900 mb-2">
-                            {{ $isFrench ? 'Retours' : 'Returns' }}
-                        </h3>
-                        <p class="text-sm text-gray-600">
-                            {{ $isFrench 
-                                ? 'Enregistrement des produits invendus ou gâtés pour traçabilité'
-                                : 'Recording unsold or spoiled products for traceability'
-                            }}
-                        </p>
-                    </div>
-                    <div class="hidden lg:block absolute top-1/2 -right-4 w-8 h-0.5 bg-gradient-to-r from-green-300 to-purple-300"></div>
-                </div>
-
-                <!-- Step 4 -->
-                <div class="bg-gradient-to-br from-purple-50 to-white p-6 rounded-2xl border-2 border-purple-200 hover:shadow-xl transition-shadow">
-                    <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl">
-                        4
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">
-                        {{ $isFrench ? 'Analyse' : 'Analysis' }}
-                    </h3>
-                    <p class="text-sm text-gray-600">
-                        {{ $isFrench 
-                            ? 'Le PDG consulte les rapports et flux de produits détaillés'
-                            : 'CEO reviews reports and detailed product flows'
-                        }}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
+    
 
     <!-- CTA Section -->
     <section class="py-16 md:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-500">

@@ -13,23 +13,60 @@
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-amber-50 via-white to-blue-50 py-6 sm:py-12">
     <div class="container mx-auto px-4 max-w-2xl">
-       <!-- Header -->
-<div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 mb-6">
-    <div class="flex items-center space-x-4">
-        <a href="{{ route('users.index') }}" class="text-white hover:text-amber-50 transition-colors duration-300">
-            <i class="fas fa-arrow-left text-2xl"></i>
-        </a>
-        <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-white">
-                <i class="fas fa-user-edit mr-3"></i>
-                {{ $isFrench ? 'Modifier l\'Utilisateur' : 'Edit User' }}
-            </h1>
-            <p class="text-amber-50 text-sm mt-1">
-                {{ $user->nom }}
-            </p>
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 mb-6">
+            <div class="flex items-center space-x-4">
+                <a href="{{ route('users.index') }}" class="text-white hover:text-amber-50 transition-colors duration-300">
+                    <i class="fas fa-arrow-left text-2xl"></i>
+                </a>
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-white">
+                        <i class="fas fa-user-edit mr-3"></i>
+                        {{ $isFrench ? 'Modifier l\'Utilisateur' : 'Edit User' }}
+                    </h1>
+                    <p class="text-amber-50 text-sm mt-1">
+                        {{ $user->nom }}
+                    </p>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
+
+        <!-- Affichage des messages de succès -->
+        @if (session('success'))
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg">
+            <div class="flex items-center">
+                <i class="fas fa-check-circle text-xl mr-3"></i>
+                <p class="font-semibold">{{ session('success') }}</p>
+            </div>
+        </div>
+        @endif
+
+        <!-- Affichage des messages d'erreur -->
+        @if (session('error'))
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg">
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-circle text-xl mr-3"></i>
+                <p class="font-semibold">{{ session('error') }}</p>
+            </div>
+        </div>
+        @endif
+
+        <!-- Affichage des erreurs de validation -->
+        @if ($errors->any())
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg">
+            <div class="flex items-start">
+                <i class="fas fa-exclamation-circle text-xl mr-3 mt-1"></i>
+                <div>
+                    <p class="font-bold mb-2">{{ $isFrench ? 'Erreurs de validation' : 'Validation errors' }}</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- Form -->
         <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8">
@@ -37,14 +74,17 @@
                 @csrf
                 @method('PUT')
 
-                <!-- Nom -->
+                <!-- Nom (gardant 'nom' comme dans la BD) -->
                 <div class="mb-6">
                     <label class="block text-gray-700 font-semibold mb-2">
                         <i class="fas fa-user mr-2 text-amber-600"></i>
                         {{ $isFrench ? 'Nom complet' : 'Full name' }}
                         <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" name="nom" value="{{ old('nom', $user->nom) }}" required
+                    <input type="text" 
+                           name="nom" 
+                           value="{{ old('nom', $user->nom) }}" 
+                           required
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-amber-500 focus:ring focus:ring-amber-200 transition-all"
                            placeholder="{{ $isFrench ? 'Entrez le nom complet' : 'Enter full name' }}">
                     @error('nom')
@@ -59,7 +99,10 @@
                         {{ $isFrench ? 'Numéro de téléphone' : 'Phone number' }}
                         <span class="text-red-500">*</span>
                     </label>
-                    <input type="tel" name="numero_telephone" value="{{ old('numero_telephone', $user->numero_telephone) }}" required
+                    <input type="tel" 
+                           name="numero_telephone" 
+                           value="{{ old('numero_telephone', $user->numero_telephone) }}" 
+                           required
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring focus:ring-blue-200 transition-all"
                            placeholder="{{ $isFrench ? '+XXX XXX XXX XXX' : '+XXX XXX XXX XXX' }}">
                     @error('numero_telephone')
@@ -74,14 +117,15 @@
                         {{ $isFrench ? 'Rôle' : 'Role' }}
                         <span class="text-red-500">*</span>
                     </label>
-                    <select name="role" required
+                    <select name="role" 
+                            required
                             class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring focus:ring-green-200 transition-all">
                         <option value="">{{ $isFrench ? 'Sélectionnez un rôle' : 'Select a role' }}</option>
-                        <option value="pdg" {{ $user->role == 'pdg' ? 'selected' : '' }}>PDG</option>
-                        <option value="pointeur" {{ $user->role == 'pointeur' ? 'selected' : '' }}>{{ $isFrench ? 'Pointeur' : 'Pointer' }}</option>
-                        <option value="vendeur_boulangerie" {{ $user->role == 'vendeur_boulangerie' ? 'selected' : '' }}>{{ $isFrench ? 'Vendeur Boulangerie' : 'Bakery Seller' }}</option>
-                        <option value="vendeur_patisserie" {{ $user->role == 'vendeur_patisserie' ? 'selected' : '' }}>{{ $isFrench ? 'Vendeur Pâtisserie' : 'Pastry Seller' }}</option>
-                        <option value="producteur" {{ $user->role == 'producteur' ? 'selected' : '' }}>{{ $isFrench ? 'Producteur' : 'Producer' }}</option>
+                        <option value="pdg" {{ old('role', $user->role) == 'pdg' ? 'selected' : '' }}>PDG</option>
+                        <option value="pointeur" {{ old('role', $user->role) == 'pointeur' ? 'selected' : '' }}>{{ $isFrench ? 'Pointeur' : 'Pointer' }}</option>
+                        <option value="vendeur_boulangerie" {{ old('role', $user->role) == 'vendeur_boulangerie' ? 'selected' : '' }}>{{ $isFrench ? 'Vendeur Boulangerie' : 'Bakery Seller' }}</option>
+                        <option value="vendeur_patisserie" {{ old('role', $user->role) == 'vendeur_patisserie' ? 'selected' : '' }}>{{ $isFrench ? 'Vendeur Pâtisserie' : 'Pastry Seller' }}</option>
+                        <option value="producteur" {{ old('role', $user->role) == 'producteur' ? 'selected' : '' }}>{{ $isFrench ? 'Producteur' : 'Producer' }}</option>
                     </select>
                     @error('role')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
@@ -94,8 +138,11 @@
                         <i class="fas fa-lock mr-2 text-purple-600"></i>
                         {{ $isFrench ? 'Nouveau Code PIN (optionnel)' : 'New PIN Code (optional)' }}
                     </label>
-                    <input type="text" name="code_pin" value="{{ old('code_pin') }}"
-                           maxlength="6" pattern="[0-9]{6}"
+                    <input type="text" 
+                           name="code_pin" 
+                           value=""
+                           maxlength="6" 
+                           pattern="[0-9]{6}"
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring focus:ring-purple-200 transition-all font-mono text-2xl tracking-widest text-center"
                            placeholder="●●●●●●">
                     @error('code_pin')
@@ -110,7 +157,10 @@
                 <!-- Status -->
                 <div class="mb-6 bg-gray-50 rounded-xl p-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" name="actif" value="1" {{ $user->actif ? 'checked' : '' }}
+                        <input type="checkbox" 
+                               name="actif" 
+                               value="1" 
+                               {{ old('actif', $user->actif) ? 'checked' : '' }}
                                class="w-6 h-6 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500">
                         <span class="text-gray-700 font-semibold">
                             <i class="fas fa-check-circle mr-2 text-green-600"></i>
@@ -127,10 +177,10 @@
                         {{ $isFrench ? 'Annuler' : 'Cancel' }}
                     </a>
                     <button type="submit"
-        class="flex-1 bg-gradient-to-r from-amber-700 to-amber-600 text-white py-3 px-6 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105">
-    <i class="fas fa-save mr-2"></i>
-    {{ $isFrench ? 'Enregistrer' : 'Save Changes' }}
-</button>
+                            class="flex-1 bg-gradient-to-r from-amber-700 to-amber-600 text-white py-3 px-6 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+                        <i class="fas fa-save mr-2"></i>
+                        {{ $isFrench ? 'Enregistrer' : 'Save Changes' }}
+                    </button>
                 </div>
             </form>
         </div>

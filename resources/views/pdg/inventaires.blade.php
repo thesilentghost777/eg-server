@@ -7,16 +7,17 @@
     .bread-gradient {
         background: linear-gradient(135deg, #D4A574 0%, #C89968 50%, #B08554 100%);
     }
+    @media print {
+        .no-print { display: none !important; }
+    }
 </style>
 @endsection
-
-
 
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-amber-50 via-white to-blue-50">
     <div class="container mx-auto px-4 py-6 sm:py-8">
         <!-- Header -->
-        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 sm:p-8 mb-6">
+        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 sm:p-8 mb-6 no-print">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2">
@@ -27,11 +28,134 @@
                         {{ $isFrench ? 'Historique des changements de garde' : 'History of shift changes' }}
                     </p>
                 </div>
+                <a href="{{ route('pdg.inventaires.imprimer', request()->all()) }}" target="_blank"
+                   class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all shadow-md">
+                    <i class="fas fa-print mr-2"></i>{{ $isFrench ? 'Imprimer' : 'Print' }}
+                </a>
             </div>
         </div>
 
+        <!-- Filtres -->
+        <div class="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 no-print">
+            <form method="GET" action="{{ route('pdg.inventaires') }}" id="filterForm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                    <!-- Vendeur Sortant -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-sign-out-alt mr-1 text-red-600"></i>
+                            {{ $isFrench ? 'Vendeur Sortant' : 'Outgoing Seller' }}
+                        </label>
+                        <select name="vendeur_sortant_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all"
+                                onchange="document.getElementById('filterForm').submit()">
+                            <option value="">{{ $isFrench ? 'Tous les vendeurs' : 'All sellers' }}</option>
+                            @foreach($vendeurs ?? [] as $vendeur)
+                                <option value="{{ $vendeur->id }}" {{ request('vendeur_sortant_id') == $vendeur->id ? 'selected' : '' }}>
+                                    {{ $vendeur->name }} ({{ ucfirst(str_replace('vendeur_', '', $vendeur->role)) }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Vendeur Entrant -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-sign-in-alt mr-1 text-green-600"></i>
+                            {{ $isFrench ? 'Vendeur Entrant' : 'Incoming Seller' }}
+                        </label>
+                        <select name="vendeur_entrant_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
+                                onchange="document.getElementById('filterForm').submit()">
+                            <option value="">{{ $isFrench ? 'Tous les vendeurs' : 'All sellers' }}</option>
+                            @foreach($vendeurs ?? [] as $vendeur)
+                                <option value="{{ $vendeur->id }}" {{ request('vendeur_entrant_id') == $vendeur->id ? 'selected' : '' }}>
+                                    {{ $vendeur->name }} ({{ ucfirst(str_replace('vendeur_', '', $vendeur->role)) }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Catégorie -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-layer-group mr-1 text-blue-600"></i>
+                            {{ $isFrench ? 'Catégorie' : 'Category' }}
+                        </label>
+                        <select name="categorie" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                                onchange="document.getElementById('filterForm').submit()">
+                            <option value="">{{ $isFrench ? 'Toutes les catégories' : 'All categories' }}</option>
+                            <option value="boulangerie" {{ request('categorie') == 'boulangerie' ? 'selected' : '' }}>
+                                {{ $isFrench ? 'Boulangerie' : 'Bakery' }}
+                            </option>
+                            <option value="patisserie" {{ request('categorie') == 'patisserie' ? 'selected' : '' }}>
+                                {{ $isFrench ? 'Pâtisserie' : 'Pastry' }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Date Début -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-calendar-start mr-1 text-amber-600"></i>
+                            {{ $isFrench ? 'Date Début' : 'Start Date' }}
+                        </label>
+                        <input type="date" name="date_debut" value="{{ request('date_debut') }}" 
+                               class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                               onchange="document.getElementById('filterForm').submit()">
+                    </div>
+
+                    <!-- Date Fin -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-calendar-check mr-1 text-amber-600"></i>
+                            {{ $isFrench ? 'Date Fin' : 'End Date' }}
+                        </label>
+                        <input type="date" name="date_fin" value="{{ request('date_fin') }}" 
+                               class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                               onchange="document.getElementById('filterForm').submit()">
+                    </div>
+
+                    <!-- Statut -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-check-circle mr-1 text-purple-600"></i>
+                            {{ $isFrench ? 'Statut' : 'Status' }}
+                        </label>
+                        <select name="statut" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                                onchange="document.getElementById('filterForm').submit()">
+                            <option value="">{{ $isFrench ? 'Tous les statuts' : 'All statuses' }}</option>
+                            <option value="valide" {{ request('statut') == 'valide' ? 'selected' : '' }}>
+                                {{ $isFrench ? 'Validé' : 'Validated' }}
+                            </option>
+                            <option value="en_attente" {{ request('statut') == 'en_attente' ? 'selected' : '' }}>
+                                {{ $isFrench ? 'En attente' : 'Pending' }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit" class="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-md hover:shadow-lg">
+                        <i class="fas fa-filter mr-2"></i>
+                        {{ $isFrench ? 'Filtrer' : 'Filter' }}
+                    </button>
+                    <a href="{{ route('pdg.inventaires') }}" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all shadow-md hover:shadow-lg">
+                        <i class="fas fa-redo mr-2"></i>
+                        {{ $isFrench ? 'Réinitialiser' : 'Reset' }}
+                    </a>
+                    <button type="button" onclick="exportToCSV()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg">
+                        <i class="fas fa-file-csv mr-2"></i>
+                        {{ $isFrench ? 'Export Résumé' : 'Summary Export' }}
+                    </button>
+                    <button type="button" onclick="exportDetailedCSV()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg">
+                        <i class="fas fa-file-excel mr-2"></i>
+                        {{ $isFrench ? 'Export Détaillé' : 'Detailed Export' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Stats -->
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 mb-8 no-print">
             <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
                 <div class="flex items-center justify-between mb-2">
                     <i class="fas fa-check-circle text-3xl opacity-80"></i>
@@ -69,20 +193,28 @@
                 <div class="bread-gradient p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div class="flex items-center space-x-4">
                         <div class="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-{{ $inventaire->categorie == 'boulangerie' ? 'bread-slice' : 'birthday-cake' }} text-2xl text-white"></i>
+                            <i class="fas fa-{{ $inventaire->categorie == 'boulangerie' ? 'bread-slice' : 'birthday-cake' }} text-2xl text-green-500"></i>
                         </div>
-                        <div class="bg-gradient-to-r from-amber-600 to-amber-700 p-4 rounded-lg shadow-md">
-    <h3 class="text-xl font-bold text-white">
-        {{ $isFrench ? 'Inventaire' : 'Inventory' }} #{{ $inventaire->id }}
-    </h3>
-    <p class="text-amber-100 text-sm mt-1">
-        {{ $inventaire->date_inventaire->format('d/m/Y') }} • {{ $inventaire->date_inventaire->format('H:i') }}
-    </p>
-</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-blue-500">
+                                {{ $isFrench ? 'Inventaire' : 'Inventory' }} #{{ $inventaire->id }}
+                            </h3>
+                            <p class="text-blue-500 text-sm mt-1">
+                                {{ $inventaire->date_inventaire->format('d/m/Y') }} • {{ $inventaire->date_inventaire->format('H:i') }}
+                            </p>
+                        </div>
                     </div>
-                    <span class="inline-flex px-4 py-2 text-sm font-medium rounded-lg bg-white/20 text-white">
-                        {{ ucfirst($inventaire->categorie) }}
-                    </span>
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex px-4 py-2 text-sm font-medium rounded-lg bg-white/20 text-blue-500">
+                            {{ ucfirst($inventaire->categorie) }}
+                        </span>
+                        <!-- Bouton Modifier -->
+                        <a href="{{ route('pdg.inventaires.edit', $inventaire->id) }}" 
+                           class="no-print inline-flex items-center px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all shadow-md">
+                            <i class="fas fa-edit mr-2"></i>
+                            {{ $isFrench ? 'Modifier' : 'Edit' }}
+                        </a>
+                    </div>
                 </div>
 
                 <div class="p-6">
@@ -95,7 +227,6 @@
                             </h4>
                             <div class="space-y-2">
                                 <p class="text-gray-700"><strong>{{ $isFrench ? 'Nom:' : 'Name:' }}</strong> {{ $inventaire->vendeurSortant->name ?? 'N/A' }}</p>
-                                <p class="text-gray-700"><strong>{{ $isFrench ? 'Code PIN:' : 'PIN:' }}</strong> ●●●●●●</p>
                                 <p class="font-semibold {{ $inventaire->valide_sortant ? 'text-green-600' : 'text-orange-600' }}">
                                     <i class="fas fa-{{ $inventaire->valide_sortant ? 'check-circle' : 'clock' }} mr-1"></i>
                                     {{ $inventaire->valide_sortant ? ($isFrench ? 'Validé' : 'Validated') : ($isFrench ? 'En attente' : 'Pending') }}
@@ -111,7 +242,6 @@
                             </h4>
                             <div class="space-y-2">
                                 <p class="text-gray-700"><strong>{{ $isFrench ? 'Nom:' : 'Name:' }}</strong> {{ $inventaire->vendeurEntrant->name ?? 'N/A' }}</p>
-                                <p class="text-gray-700"><strong>{{ $isFrench ? 'Code PIN:' : 'PIN:' }}</strong> ●●●●●●</p>
                                 <p class="font-semibold {{ $inventaire->valide_entrant ? 'text-green-600' : 'text-orange-600' }}">
                                     <i class="fas fa-{{ $inventaire->valide_entrant ? 'check-circle' : 'clock' }} mr-1"></i>
                                     {{ $inventaire->valide_entrant ? ($isFrench ? 'Validé' : 'Validated') : ($isFrench ? 'En attente' : 'Pending') }}
@@ -169,8 +299,6 @@
                         <p>{{ $isFrench ? 'Aucun produit inventorié' : 'No products inventoried' }}</p>
                     </div>
                     @endif
-
-                   
                 </div>
             </div>
             @empty
@@ -183,7 +311,7 @@
 
         <!-- Pagination -->
         @if($inventaires->hasPages())
-        <div class="mt-8">
+        <div class="mt-8 no-print">
             {{ $inventaires->links() }}
         </div>
         @endif
@@ -192,7 +320,6 @@
 
 <script>
 function exportToCSV() {
-    // Préparer les données
     const inventaires = @json($inventaires->items());
     
     if (inventaires.length === 0) {
@@ -200,29 +327,18 @@ function exportToCSV() {
         return;
     }
 
-    // En-têtes CSV
     const headers = [
-        '{{ $isFrench ? "ID" : "ID" }}',
-        '{{ $isFrench ? "Date" : "Date" }}',
-        '{{ $isFrench ? "Heure" : "Time" }}',
-        '{{ $isFrench ? "Catégorie" : "Category" }}',
-        '{{ $isFrench ? "Vendeur Sortant" : "Outgoing Seller" }}',
-        '{{ $isFrench ? "Validé Sortant" : "Outgoing Validated" }}',
-        '{{ $isFrench ? "Vendeur Entrant" : "Incoming Seller" }}',
-        '{{ $isFrench ? "Validé Entrant" : "Incoming Validated" }}',
-        '{{ $isFrench ? "Nombre Produits" : "Number of Products" }}',
-        '{{ $isFrench ? "Valeur Totale (F)" : "Total Value (F)" }}'
+        'ID', 'Date', 'Heure', 'Catégorie', 'Vendeur Sortant', 'Validé Sortant',
+        'Vendeur Entrant', 'Validé Entrant', 'Nombre Produits', 'Valeur Totale (F)'
     ];
 
-    // Construire les lignes CSV
-    let csvContent = headers.join(',') + '\n';
+    let csvContent = headers.join(';') + '\n';
 
     inventaires.forEach(inv => {
         const date = new Date(inv.date_inventaire);
         const dateStr = date.toLocaleDateString('fr-FR');
         const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         
-        // Calculer la valeur totale
         let valeurTotale = 0;
         if (inv.details && inv.details.length > 0) {
             valeurTotale = inv.details.reduce((sum, detail) => {
@@ -237,18 +353,18 @@ function exportToCSV() {
             `"${timeStr}"`,
             `"${inv.categorie}"`,
             `"${inv.vendeur_sortant ? inv.vendeur_sortant.name : 'N/A'}"`,
-            inv.valide_sortant ? '{{ $isFrench ? "Oui" : "Yes" }}' : '{{ $isFrench ? "Non" : "No" }}',
+            inv.valide_sortant ? 'Oui' : 'Non',
             `"${inv.vendeur_entrant ? inv.vendeur_entrant.name : 'N/A'}"`,
-            inv.valide_entrant ? '{{ $isFrench ? "Oui" : "Yes" }}' : '{{ $isFrench ? "Non" : "No" }}',
+            inv.valide_entrant ? 'Oui' : 'Non',
             inv.details ? inv.details.length : 0,
             valeurTotale.toFixed(2)
         ];
 
-        csvContent += row.join(',') + '\n';
+        csvContent += row.join(';') + '\n';
     });
 
-    // Créer un Blob et télécharger
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
@@ -260,10 +376,16 @@ function exportToCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    const message = '{{ $isFrench ? "Export réussi !" : "Export successful!" }}';
+    const div = document.createElement('div');
+    div.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    div.innerHTML = '<i class="fas fa-check-circle mr-2"></i>' + message;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
 }
 
 function exportDetailedCSV() {
-    // Export détaillé avec tous les produits
     const inventaires = @json($inventaires->items());
     
     if (inventaires.length === 0) {
@@ -271,21 +393,12 @@ function exportDetailedCSV() {
         return;
     }
 
-    // En-têtes CSV pour export détaillé
     const headers = [
-        '{{ $isFrench ? "ID Inventaire" : "Inventory ID" }}',
-        '{{ $isFrench ? "Date" : "Date" }}',
-        '{{ $isFrench ? "Heure" : "Time" }}',
-        '{{ $isFrench ? "Catégorie" : "Category" }}',
-        '{{ $isFrench ? "Vendeur Sortant" : "Outgoing Seller" }}',
-        '{{ $isFrench ? "Vendeur Entrant" : "Incoming Seller" }}',
-        '{{ $isFrench ? "Produit" : "Product" }}',
-        '{{ $isFrench ? "Quantité" : "Quantity" }}',
-        '{{ $isFrench ? "Prix Unitaire (F)" : "Unit Price (F)" }}',
-        '{{ $isFrench ? "Valeur Totale (F)" : "Total Value (F)" }}'
+        'ID Inventaire', 'Date', 'Heure', 'Catégorie', 'Vendeur Sortant',
+        'Vendeur Entrant', 'Produit', 'Quantité', 'Prix Unitaire (F)', 'Valeur Totale (F)'
     ];
 
-    let csvContent = headers.join(',') + '\n';
+    let csvContent = headers.join(';') + '\n';
 
     inventaires.forEach(inv => {
         const date = new Date(inv.date_inventaire);
@@ -314,13 +427,13 @@ function exportDetailedCSV() {
                     valeurLigne.toFixed(2)
                 ];
 
-                csvContent += row.join(',') + '\n';
+                csvContent += row.join(';') + '\n';
             });
         }
     });
 
-    // Créer un Blob et télécharger
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
@@ -332,6 +445,13 @@ function exportDetailedCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    const message = '{{ $isFrench ? "Export détaillé réussi !" : "Detailed export successful!" }}';
+    const div = document.createElement('div');
+    div.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    div.innerHTML = '<i class="fas fa-check-circle mr-2"></i>' + message;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
 }
 </script>
 @endsection

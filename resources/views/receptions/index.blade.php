@@ -11,6 +11,26 @@
         .no-print { display: none !important; }
         .print-full-width { width: 100% !important; }
     }
+    
+    /* Optimisation pour grands volumes */
+    .compact-row td {
+        padding: 0.5rem !important;
+        font-size: 0.875rem;
+    }
+    
+    .sticky-header th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: linear-gradient(135deg, #D4A574 0%, #C89968 50%, #B08554 100%);
+    }
+    
+    /* Mise en cache visuelle pour le défilement */
+    .table-container {
+        height: 600px;
+        overflow-y: auto;
+        contain: layout style paint;
+    }
 </style>
 @endsection
 
@@ -18,7 +38,7 @@
 <div class="min-h-screen bg-gradient-to-br from-amber-50 via-white to-blue-50">
     <div class="container mx-auto px-4 py-6 sm:py-8">
         <!-- Header -->
-        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 sm:p-8 mb-6">
+        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 sm:p-8 mb-6 no-print">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2">
@@ -29,7 +49,12 @@
                         {{ $isFrench ? 'Suivi des arrivages et réceptions' : 'Track arrivals and receptions' }}
                     </p>
                 </div>
-                
+                <div class="flex gap-2">
+                    <a href="{{ route('pdg.receptions.imprimer', request()->all()) }}" target="_blank"
+                       class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all shadow-md">
+                        <i class="fas fa-print mr-2"></i>{{ $isFrench ? 'Imprimer' : 'Print' }}
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -111,21 +136,21 @@
                     </div>
 
                     <!-- Vendeur -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-store mr-1 text-green-600"></i>
-                            {{ $isFrench ? 'Vendeur Assigné' : 'Assigned Seller' }}
-                        </label>
-                        <select name="vendeur_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
-                                onchange="document.getElementById('filterForm').submit()">
-                            <option value="">{{ $isFrench ? 'Tous les vendeurs' : 'All sellers' }}</option>
-                            @foreach($vendeurs ?? [] as $vendeur)
-                                <option value="{{ $vendeur->id }}" {{ request('vendeur_id') == $vendeur->id ? 'selected' : '' }}>
-                                    {{ $vendeur->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+<div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">
+        <i class="fas fa-store mr-1 text-green-600"></i>
+        {{ $isFrench ? 'Vendeur Assigné' : 'Assigned Seller' }}
+    </label>
+    <select name="vendeur_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
+            onchange="document.getElementById('filterForm').submit()">
+        <option value="">{{ $isFrench ? 'Tous les vendeurs' : 'All sellers' }}</option>
+        @foreach($vendeurs ?? [] as $vendeur)
+            <option value="{{ $vendeur->id }}" {{ request('vendeur_id') == $vendeur->id ? 'selected' : '' }}>
+                {{ $vendeur->name }} ({{ ucfirst(str_replace('vendeur_', '', $vendeur->role)) }})
+            </option>
+        @endforeach
+    </select>
+</div>
 
                     <!-- Statut Verrou -->
                     <div>
@@ -180,129 +205,142 @@
             </form>
         </div>
 
-        <!-- Summary Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-            <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-box text-3xl opacity-80"></i>
-                    <span class="text-3xl font-bold">{{ $receptions->total() }}</span>
-                </div>
-                <h3 class="text-lg font-semibold">{{ $isFrench ? 'Total Réceptions' : 'Total Receptions' }}</h3>
-            </div>
-            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-layer-group text-3xl opacity-80"></i>
-                    <span class="text-3xl font-bold">{{ $receptions->sum('quantite') }}</span>
-                </div>
-                <h3 class="text-lg font-semibold">{{ $isFrench ? 'Quantité Totale' : 'Total Quantity' }}</h3>
-            </div>
-            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-users text-3xl opacity-80"></i>
-                    <span class="text-3xl font-bold">{{ $receptions->unique('producteur_id')->count() }}</span>
-                </div>
-                <h3 class="text-lg font-semibold">{{ $isFrench ? 'Producteurs Actifs' : 'Active Producers' }}</h3>
-            </div>
-            <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-boxes text-3xl opacity-80"></i>
-                    <span class="text-3xl font-bold">{{ $receptions->unique('produit_id')->count() }}</span>
-                </div>
-                <h3 class="text-lg font-semibold">{{ $isFrench ? 'Produits Différents' : 'Different Products' }}</h3>
-            </div>
-        </div>
+        
 
         <!-- Receptions Table -->
         <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bread-gradient text-white">
-                        <tr>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Date/Heure' : 'Date/Time' }}</th>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Produit' : 'Product' }}</th>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Catégorie' : 'Category' }}</th>
-                            <th class="px-4 py-4 text-center text-sm font-semibold">{{ $isFrench ? 'Quantité' : 'Quantity' }}</th>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Producteur' : 'Producer' }}</th>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Pointeur' : 'Pointer' }}</th>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">{{ $isFrench ? 'Vendeur' : 'Seller' }}</th>
-                            <th class="px-4 py-4 text-center text-sm font-semibold">{{ $isFrench ? 'Statut' : 'Status' }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        @forelse($receptions as $reception)
-                        <tr class="hover:bg-amber-50 transition-colors">
-                            <td class="px-4 py-4">
-                                <div class="text-sm">
-                                    <div class="font-medium text-gray-900">{{ $reception->date_reception->format('d/m/Y') }}</div>
-                                    <div class="text-gray-500">{{ $reception->date_reception->format('H:i') }}</div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gradient-to-r from-blue-600 to-blue-700">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white">
+                        {{ $isFrench ? 'Date/Heure' : 'Date/Time' }}
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white">
+                        {{ $isFrench ? 'Produit' : 'Product' }}
+                    </th>
+                    <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-white">
+                        {{ $isFrench ? 'Qté' : 'Qty' }}
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white">
+                        {{ $isFrench ? 'Pointeur' : 'Pointer' }}
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white">
+                        {{ $isFrench ? 'Vendeur' : 'Seller' }}
+                    </th>
+                    <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-white no-print">
+                        {{ $isFrench ? 'Actions' : 'Actions' }}
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                @forelse($receptions as $reception)
+                <tr class="hover:bg-blue-50 transition-colors duration-150">
+                    <!-- Date/Heure -->
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-900">
+                                {{ $reception->date_reception->format('d/m/Y') }}
+                            </span>
+                            <span class="text-xs text-gray-500">
+                                {{ $reception->date_reception->format('H:i') }}
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <!-- Produit -->
+                    <td class="px-6 py-4">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-semibold text-gray-900">
+                                {{ $reception->produit->nom }}
+                            </span>
+                            <span class="text-xs text-gray-500 mt-1">
+                                {{ number_format($reception->produit->prix, 0, ',', ' ') }} FCFA
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <!-- Quantité -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        <span class="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                            {{ $reception->quantite }}
+                        </span>
+                    </td>
+                    
+                    <!-- Pointeur -->
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-gray-600 text-xs"></i>
+                            </div>
+                            <span class="ml-3 text-sm text-gray-900">
+                                {{ $reception->pointeur->name }}
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <!-- Vendeur -->
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            @if($reception->vendeurAssigne)
+                                <div class="flex-shrink-0 h-8 w-8 bg-green-200 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-user-tie text-green-600 text-xs"></i>
                                 </div>
-                            </td>
-                            <td class="px-4 py-4">
-                                <span class="font-semibold text-gray-900">{{ $reception->produit->nom }} - {{ $reception->produit->prix }} FCFA</span>
-                            </td>
-                            <td class="px-4 py-4">
-                                <span class="inline-flex px-3 py-1 text-xs font-medium rounded-full
-                                    {{ $reception->produit->categorie == 'boulangerie' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800' }}">
-                                    <i class="fas fa-{{ $reception->produit->categorie == 'boulangerie' ? 'bread-slice' : 'birthday-cake' }} mr-1"></i>
-                                    {{ ucfirst($reception->produit->categorie) }}
+                                <span class="ml-3 text-sm text-gray-900">
+                                    {{ $reception->vendeurAssigne->name }}
                                 </span>
-                            </td>
-                            <td class="px-4 py-4 text-center">
-                                <span class="font-bold text-lg text-blue-600">{{ $reception->quantite }}</span>
-                            </td>
-                            <td class="px-4 py-4">
+                            @else
                                 <div class="flex items-center">
-                                    <i class="fas fa-user-tie text-purple-600 mr-2"></i>
-                                    <span class="text-sm text-gray-700">{{ $reception->producteur->name }}</span>
-                                </div>
-                            </td>
-                            <td class="px-4 py-4">
-                                <div class="flex items-center">
-                                    <i class="fas fa-user-check text-blue-600 mr-2"></i>
-                                    <span class="text-sm text-gray-700">{{ $reception->pointeur->name }}</span>
-                                </div>
-                            </td>
-                            <td class="px-4 py-4">
-                                <div class="flex items-center">
-                                    <i class="fas fa-store text-green-600 mr-2"></i>
-                                    <span class="text-sm text-gray-700">
-                                        {{ $reception->vendeurAssigne ? $reception->vendeurAssigne->name : ($isFrench ? 'Non assigné' : 'Not assigned') }}
+                                    <div class="flex-shrink-0 h-8 w-8 bg-amber-100 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-user-slash text-amber-600 text-xs"></i>
+                                    </div>
+                                    <span class="ml-3 text-sm text-amber-600 italic">
+                                        {{ $isFrench ? 'Non assigné' : 'Not assigned' }}
                                     </span>
                                 </div>
-                            </td>
-                            <td class="px-4 py-4 text-center">
-                                @if($reception->verrou)
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                        <i class="fas fa-lock mr-1"></i>
-                                        {{ $isFrench ? 'Verrouillé' : 'Locked' }}
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        <i class="fas fa-lock-open mr-1"></i>
-                                        {{ $isFrench ? 'Ouvert' : 'Open' }}
-                                    </span>
-                                @endif
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="8" class="px-4 py-12 text-center text-gray-500">
-                                <i class="fas fa-inbox text-5xl text-gray-300 mb-4"></i>
-                                <p class="text-lg">{{ $isFrench ? 'Aucune réception trouvée' : 'No receptions found' }}</p>
-                            </td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                            @endif
+                        </div>
+                    </td>
+                    
+                    <!-- Actions -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center no-print">
+                        @if(!$reception->verrou)
+                            <a href="{{ route('pdg.receptions.edit', $reception->id) }}" 
+                               class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow-md">
+                                <i class="fas fa-edit mr-2"></i>
+                                {{ $isFrench ? 'Modifier' : 'Edit' }}
+                            </a>
+                        @else
+                            <span class="inline-flex items-center justify-center px-4 py-2 bg-red-50 text-red-700 text-sm font-medium rounded-lg border border-red-200">
+                                <i class="fas fa-lock mr-2"></i>
+                                {{ $isFrench ? 'Verrouillé' : 'Locked' }}
+                            </span>
+                        @endif
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="6" class="px-6 py-16">
+                        <div class="flex flex-col items-center justify-center text-gray-400">
+                            <i class="fas fa-inbox text-6xl mb-4"></i>
+                            <p class="text-lg font-medium text-gray-500">
+                                {{ $isFrench ? 'Aucune réception trouvée' : 'No receptions found' }}
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
-            <!-- Pagination -->
-            @if($receptions->hasPages())
-            <div class="px-6 py-4 border-t border-gray-200 no-print">
-                {{ $receptions->links() }}
-            </div>
-            @endif
-        </div>
+    <!-- Pagination -->
+    @if($receptions->hasPages())
+    <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 no-print">
+        {{ $receptions->links() }}
+    </div>
+    @endif
+</div>
     </div>
 </div>
 
@@ -328,83 +366,57 @@ function setDateFilter(type) {
 
 function exportToCSV() {
     try {
-        // Récupérer toutes les lignes du tableau
         const table = document.querySelector('table');
         const rows = table.querySelectorAll('tbody tr');
         
-        // Vérifier s'il y a des données
         if (rows.length === 0 || rows[0].cells.length === 1) {
             alert('{{ $isFrench ? "Aucune donnée à exporter" : "No data to export" }}');
             return;
         }
         
-        // Créer le contenu CSV
         let csvContent = '';
         
-        // En-têtes
         const headers = [
             '{{ $isFrench ? "Date" : "Date" }}',
             '{{ $isFrench ? "Heure" : "Time" }}',
             '{{ $isFrench ? "Produit" : "Product" }}',
-            '{{ $isFrench ? "Catégorie" : "Category" }}',
+            '{{ $isFrench ? "Prix Unitaire" : "Unit Price" }}',
             '{{ $isFrench ? "Quantité" : "Quantity" }}',
             '{{ $isFrench ? "Producteur" : "Producer" }}',
             '{{ $isFrench ? "Pointeur" : "Pointer" }}',
-            '{{ $isFrench ? "Vendeur" : "Seller" }}',
-            '{{ $isFrench ? "Statut" : "Status" }}'
+            '{{ $isFrench ? "Vendeur" : "Seller" }}'
         ];
         csvContent += headers.join(';') + '\n';
         
-        // Parcourir toutes les lignes
         rows.forEach(row => {
-            if (row.cells.length > 1) { // Ignorer la ligne "Aucune réception"
+            if (row.cells.length > 1) {
                 const cells = row.querySelectorAll('td');
                 const rowData = [];
                 
-                // Date
-                const dateCell = cells[0].querySelector('.font-medium');
-                rowData.push(dateCell ? dateCell.textContent.trim() : '');
+                const dateDiv = cells[0].querySelector('.font-medium');
+                rowData.push(dateDiv ? dateDiv.textContent.trim() : '');
                 
-                // Heure
-                const heureCell = cells[0].querySelector('.text-gray-500');
-                rowData.push(heureCell ? heureCell.textContent.trim() : '');
+                const heureDiv = cells[0].querySelector('.text-gray-500');
+                rowData.push(heureDiv ? heureDiv.textContent.trim() : '');
                 
-                // Produit
-                const produitCell = cells[1].querySelector('.font-semibold');
-                rowData.push(produitCell ? produitCell.textContent.trim() : '');
+                const produitDiv = cells[1].querySelector('.font-semibold');
+                rowData.push(produitDiv ? produitDiv.textContent.trim() : '');
                 
-                // Catégorie
-                const categorieSpan = cells[2].querySelector('span');
-                const categorieText = categorieSpan ? categorieSpan.textContent.trim() : '';
-                rowData.push(categorieText.replace(/\s+/g, ' '));
+                const prixDiv = cells[1].querySelector('.text-gray-500');
+                rowData.push(prixDiv ? prixDiv.textContent.trim().replace(' FCFA', '') : '');
                 
-                // Quantité
-                const quantiteCell = cells[3].querySelector('.font-bold');
-                rowData.push(quantiteCell ? quantiteCell.textContent.trim() : '');
+                const quantiteSpan = cells[2].querySelector('.font-bold');
+                rowData.push(quantiteSpan ? quantiteSpan.textContent.trim() : '');
                 
-                // Producteur
-                const producteurCell = cells[4].querySelector('.text-gray-700');
-                rowData.push(producteurCell ? producteurCell.textContent.trim() : '');
-                
-                // Pointeur
-                const pointeurCell = cells[5].querySelector('.text-gray-700');
-                rowData.push(pointeurCell ? pointeurCell.textContent.trim() : '');
-                
-                // Vendeur
-                const vendeurCell = cells[6].querySelector('.text-gray-700');
-                rowData.push(vendeurCell ? vendeurCell.textContent.trim() : '');
-                
-                // Statut
-                const statutSpan = cells[7].querySelector('span');
-                const statutText = statutSpan ? statutSpan.textContent.trim() : '';
-                rowData.push(statutText.replace(/\s+/g, ' '));
+                rowData.push(cells[3].textContent.trim());
+                rowData.push(cells[4].textContent.trim());
+                rowData.push(cells[5].textContent.trim());
                 
                 csvContent += rowData.map(cell => '"' + cell.replace(/"/g, '""') + '"').join(';') + '\n';
             }
         });
         
-        // Créer un blob et télécharger
-        const BOM = '\uFEFF'; // UTF-8 BOM pour Excel
+        const BOM = '\uFEFF';
         const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
@@ -417,7 +429,6 @@ function exportToCSV() {
         link.click();
         document.body.removeChild(link);
         
-        // Afficher un message de succès
         const message = '{{ $isFrench ? "Export réussi !" : "Export successful!" }}';
         const div = document.createElement('div');
         div.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';

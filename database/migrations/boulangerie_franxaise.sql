@@ -117,6 +117,9 @@ INSERT INTO produits (nom, prix, categorie, actif, created_at, updated_at) VALUE
 ('Mylo Dokeri', 600.00, 'patisserie', 1, NOW(), NOW()),
 ('Mylo 330 ML', 500.00, 'patisserie', 1, NOW(), NOW()),
 ('Mylo Jus 500 ML', 500.00, 'patisserie', 1, NOW(), NOW()),
+('Mylo Jus 250 ML', 350.00, 'patisserie', 1, NOW(), NOW()),
+('Mylo Jus 170 G', 300.00, 'patisserie', 1, NOW(), NOW()),
+('Mylo NATURE S,S', 250.00, 'patisserie', 1, NOW(), NOW()),
 ('Mylo 250 ML sachet', 250.00, 'patisserie', 1, NOW(), NOW()),
 ('Mylo boite', 200.00, 'patisserie', 1, NOW(), NOW()),
 ('Mylo sachet long', 200.00, 'patisserie', 1, NOW(), NOW()),
@@ -129,4 +132,4 @@ INSERT INTO produits (nom, prix, categorie, actif, created_at, updated_at) VALUE
 ('aspiral', 200.00, 'patisserie', 1, NOW(), NOW()),
 ('bis baguette', 150.00, 'patisserie', 1, NOW(), NOW()),
 ('bis baguette', 100.00, 'patisserie', 1, NOW(), NOW()),
-('Olive/crystal', 0.00, 'patisserie', 1, NOW(), NOW());
+('Olive/crystal', 100.00, 'patisserie', 1, NOW(), NOW());
