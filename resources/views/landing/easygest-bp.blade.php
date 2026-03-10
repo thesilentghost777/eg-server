@@ -123,28 +123,6 @@
         .mobile-menu.active {
             transform: translateX(0);
         }
-
-        /* Tablette highlight */
-        .tablet-badge {
-            background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(217,119,6,0.15));
-            border: 1px solid rgba(251,191,36,0.4);
-            animation: tabletGlow 3s ease-in-out infinite;
-        }
-
-        @keyframes tabletGlow {
-            0%, 100% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.2); }
-            50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.5); }
-        }
-
-        .new-badge {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            animation: newBadgePulse 2s ease-in-out infinite;
-        }
-
-        @keyframes newBadgePulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
     </style>
 </head>
 <body class="bg-bread-deeper text-white overflow-x-hidden">
@@ -178,10 +156,6 @@
                 <div class="hidden md:flex items-center gap-8">
                     <a href="#accueil" class="text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
                     <a href="#fonctionnalites" class="text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
-                    <a href="#tablette" class="text-white/80 hover:text-bread-gold transition-colors flex items-center gap-1">
-                        Tablette
-                        <span class="new-badge text-bread-dark text-[10px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>
-                    </a>
                     <a href="#roles" class="text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
                     <a href="#flux" class="text-white/80 hover:text-bread-gold transition-colors">Flux</a>
                 </div>
@@ -209,10 +183,6 @@
             <div class="flex flex-col gap-6">
                 <a href="#accueil" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
                 <a href="#fonctionnalites" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
-                <a href="#tablette" class="text-xl text-white/80 hover:text-bread-gold transition-colors flex items-center gap-2">
-                    Tablette Producteurs
-                    <span class="new-badge text-bread-dark text-[10px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>
-                </a>
                 <a href="#roles" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
                 <a href="#flux" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Flux</a>
                 <a href="https://play.google.com/store" target="_blank" class="mt-4 bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-6 py-3 rounded-full font-semibold text-center">
@@ -246,7 +216,7 @@
                     </h1>
                     <p class="text-base sm:text-lg md:text-xl text-white/70 mb-6 sm:mb-8 leading-relaxed">
                         La solution complète de gestion pour boulangeries et pâtisseries. 
-                        Suivi des flux, inventaires, sessions de vente et gestion des stocks matières — même sans internet!
+                        Suivi des flux, inventaires et sessions de vente - même sans internet!
                     </p>
                     <div class="flex flex-wrap gap-3 sm:gap-4 mb-6 sm:mb-10">
                         <a href="https://play.google.com/store" target="_blank" class="group bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-base sm:text-lg hover:shadow-2xl hover:shadow-bread-gold/40 transition-all flex items-center gap-2 sm:gap-3">
@@ -298,15 +268,13 @@
                                         <p class="text-white/60 text-xs sm:text-sm">Sessions & Inventaires</p>
                                     </div>
                                 </div>
-                                <!-- NEW: Tablette Producteur -->
-                                <div class="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-amber-500/10 rounded-xl border border-amber-400/30 relative">
-                                    <span class="absolute -top-2 -right-2 new-badge text-bread-dark text-[9px] font-bold px-1.5 py-0.5 rounded-full">NEW</span>
-                                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                                        <span class="text-amber-400 text-lg sm:text-xl">📱</span>
+                                <div class="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-white/5 rounded-xl">
+                                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-orange-400 text-lg sm:text-xl">🏭</span>
                                     </div>
                                     <div>
-                                        <p class="font-semibold text-amber-300 text-sm sm:text-base">Tablette Producteurs</p>
-                                        <p class="text-white/60 text-xs sm:text-sm">Stocks & Productions</p>
+                                        <p class="font-semibold text-sm sm:text-base">Producteur</p>
+                                        <p class="text-white/60 text-xs sm:text-sm">Production & Stocks Matières</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-bread-gold/10 rounded-xl border border-bread-gold/30">
@@ -314,7 +282,7 @@
                                         <span class="text-bread-gold text-lg sm:text-xl">👑</span>
                                     </div>
                                     <div>
-                                        <p class="font-semibold text-bread-gold text-sm sm:text-base">PDG</p>
+                                        <p class="font-semibold text-bread-gold text-sm sm:text-base">DG/PDG</p>
                                         <p class="text-white/60 text-xs sm:text-sm">Contrôle Total</p>
                                     </div>
                                 </div>
@@ -372,7 +340,7 @@
                         💰
                     </div>
                     <h3 class="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Sessions de Vente</h3>
-                    <p class="text-white/70 text-sm sm:text-base">Ouvrez des sessions avec fond de caisse et Mobile Money. Fermeture par le PDG avec calcul du manquant.</p>
+                    <p class="text-white/70 text-sm sm:text-base">Ouvrez des sessions avec fond de caisse et Mobile Money. Fermeture par le DG/PDG avec calcul du manquant.</p>
                 </div>
 
                 <div class="glass rounded-2xl p-6 sm:p-8 card-hover" data-aos="fade-up" data-aos-delay="600">
@@ -383,147 +351,16 @@
                     <p class="text-white/70 text-sm sm:text-base">Visualisez entrées, sorties, retours et ventes. Calcul automatique des quantités vendues.</p>
                 </div>
 
-                <!-- NEW FEATURE CARD - Tablette Producteurs -->
-                <div class="tablet-badge rounded-2xl p-6 sm:p-8 card-hover sm:col-span-2 lg:col-span-3" data-aos="fade-up" data-aos-delay="700">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                        <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl flex-shrink-0 pulse-gold">
-                            📱
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                                <h3 class="text-lg sm:text-xl font-bold text-amber-300">Tablette Producteurs</h3>
-                                <span class="new-badge text-bread-dark text-xs font-bold px-2 py-0.5 rounded-full">NOUVEAU</span>
-                            </div>
-                            <p class="text-white/70 text-sm sm:text-base">
-                                Une interface dédiée à la gestion de la production et des stocks matières. Le responsable administratif saisit les stocks initiaux et les livraisons ; les producteurs enregistrent leur production avec le détail des matières utilisées — pour une estimation automatique des bénéfices.
-                            </p>
-                        </div>
+                <div class="glass rounded-2xl p-6 sm:p-8 card-hover" data-aos="fade-up" data-aos-delay="700">
+                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl mb-4 sm:mb-6">
+                        🏭
                     </div>
+                    <h3 class="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Gestion de Production</h3>
+                    <p class="text-white/70 text-sm sm:text-base">Les producteurs saisissent leur production via tablette en précisant les quantités de matières premières utilisées. Estimation automatique des bénéfices et suivi des stocks en temps réel.</p>
                 </div>
             </div>
         </div>
     </section>
-
-    <!-- ===== NEW SECTION: Tablette Producteurs ===== -->
-    <section id="tablette" class="py-16 sm:py-24 bg-gradient-to-b from-bread-dark to-bread-deeper relative overflow-hidden">
-        <!-- Decorative blobs -->
-        <div class="absolute top-10 left-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl"></div>
-        <div class="absolute bottom-10 right-0 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl"></div>
-
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div class="text-center mb-12 sm:mb-16" data-aos="fade-up">
-                <div class="inline-flex items-center gap-2 mb-3">
-                    <span class="text-amber-400 font-semibold text-sm sm:text-base">Nouvelle Fonctionnalité</span>
-                    <span class="new-badge text-bread-dark text-xs font-bold px-2 py-0.5 rounded-full">NEW</span>
-                </div>
-                <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold mt-3">Tablette Producteurs</h2>
-                <p class="text-white/60 mt-4 max-w-2xl mx-auto text-sm sm:text-base">
-                    Une interface dédiée, partagée entre l'administration et les producteurs, pour une gestion précise des stocks et une estimation des bénéfices en temps réel.
-                </p>
-            </div>
-
-            <!-- Two columns: Admin & Producteur -->
-            <div class="grid sm:grid-cols-2 gap-6 sm:gap-8 mb-12 sm:mb-16">
-                <!-- Admin side -->
-                <div class="glass rounded-2xl p-6 sm:p-8 card-hover border border-blue-400/20" data-aos="fade-right">
-                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl mb-4 sm:mb-6">
-                        🗂️
-                    </div>
-                    <h3 class="text-xl sm:text-2xl font-bold mb-2 text-blue-300">Responsable Admin</h3>
-                    <p class="text-white/60 text-sm mb-4 sm:mb-6">Gestion centralisée des matières premières</p>
-                    <ul class="space-y-3 text-sm sm:text-base">
-                        <li class="flex items-start gap-3">
-                            <span class="text-blue-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Saisir les <strong>stocks initiaux</strong> de matières premières (farine, beurre, sucre, etc.)</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-blue-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Enregistrer les <strong>livraisons</strong> et réapprovisionnements</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-blue-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Visualiser l'état des stocks en temps réel</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-blue-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Recevoir des alertes de stock bas</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- Producteur side -->
-                <div class="glass rounded-2xl p-6 sm:p-8 card-hover border border-amber-400/20" data-aos="fade-left">
-                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl mb-4 sm:mb-6">
-                        👨‍🍳
-                    </div>
-                    <h3 class="text-xl sm:text-2xl font-bold mb-2 text-amber-300">Producteur</h3>
-                    <p class="text-white/60 text-sm mb-4 sm:mb-6">Saisie de la production avec détail matières</p>
-                    <ul class="space-y-3 text-sm sm:text-base">
-                        <li class="flex items-start gap-3">
-                            <span class="text-amber-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Enregistrer les <strong>quantités produites</strong> par produit</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-amber-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Préciser les <strong>matières consommées</strong> (farine, beurre…) et leurs quantités</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-amber-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Déduction automatique des matières du stock disponible</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-amber-400 flex-shrink-0 mt-0.5">✓</span>
-                            <span>Consulter l'historique de ses productions</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Bénéfice estimation highlight -->
-            <div class="tablet-badge rounded-3xl p-6 sm:p-10 max-w-3xl mx-auto" data-aos="fade-up">
-                <div class="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
-                    <div class="text-5xl sm:text-6xl flex-shrink-0">📈</div>
-                    <div>
-                        <h4 class="text-xl sm:text-2xl font-bold text-amber-300 mb-2">Estimation automatique des bénéfices</h4>
-                        <p class="text-white/70 text-sm sm:text-base">
-                            En croisant les coûts des matières utilisées et les quantités produites, EasyGest BP calcule automatiquement une <strong class="text-amber-300">estimation des bénéfices</strong> sur chaque production — pour piloter la rentabilité sans effort.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Flow diagram -->
-            <div class="mt-12 sm:mt-16" data-aos="fade-up">
-                <h3 class="text-center text-xl sm:text-2xl font-bold mb-8 text-white/90">Comment ça fonctionne</h3>
-                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 flex-wrap">
-                    <div class="glass rounded-2xl p-4 text-center w-full sm:w-44">
-                        <div class="text-3xl mb-2">🗄️</div>
-                        <p class="font-semibold text-sm text-blue-300">Stocks initiaux</p>
-                        <p class="text-white/50 text-xs mt-1">Saisie par l'admin</p>
-                    </div>
-                    <div class="text-bread-gold text-2xl font-bold rotate-90 sm:rotate-0">→</div>
-                    <div class="glass rounded-2xl p-4 text-center w-full sm:w-44">
-                        <div class="text-3xl mb-2">🚚</div>
-                        <p class="font-semibold text-sm text-blue-300">Livraisons</p>
-                        <p class="text-white/50 text-xs mt-1">Mises à jour du stock</p>
-                    </div>
-                    <div class="text-bread-gold text-2xl font-bold rotate-90 sm:rotate-0">→</div>
-                    <div class="glass rounded-2xl p-4 text-center w-full sm:w-44 border border-amber-400/30">
-                        <div class="text-3xl mb-2">👨‍🍳</div>
-                        <p class="font-semibold text-sm text-amber-300">Production</p>
-                        <p class="text-white/50 text-xs mt-1">Saisie + matières</p>
-                    </div>
-                    <div class="text-bread-gold text-2xl font-bold rotate-90 sm:rotate-0">→</div>
-                    <div class="glass rounded-2xl p-4 text-center w-full sm:w-44 border border-green-400/30">
-                        <div class="text-3xl mb-2">📊</div>
-                        <p class="font-semibold text-sm text-green-300">Bénéfices estimés</p>
-                        <p class="text-white/50 text-xs mt-1">Calcul automatique</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    <!-- ===== END NEW SECTION ===== -->
 
     <!-- Roles Section -->
     <section id="roles" class="py-16 sm:py-24 hero-gradient">
@@ -588,40 +425,39 @@
                     </ul>
                 </div>
 
-                <!-- Producteur (NEW) -->
-                <div class="glass rounded-2xl p-6 sm:p-8 card-hover border border-amber-400/30 relative" data-aos="fade-up" data-aos-delay="300">
-                    <span class="absolute -top-3 left-1/2 -translate-x-1/2 new-badge text-bread-dark text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">NOUVEAU</span>
-                    <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-3xl sm:text-4xl mx-auto mb-4 sm:mb-6">
-                        👨‍🍳
+                <!-- Producteur -->
+                <div class="glass rounded-2xl p-6 sm:p-8 card-hover" data-aos="fade-up" data-aos-delay="300">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-3xl sm:text-4xl mx-auto mb-4 sm:mb-6">
+                        🏭
                     </div>
-                    <h3 class="text-xl sm:text-2xl font-bold text-center mb-3 sm:mb-4 text-amber-300">Producteur</h3>
-                    <p class="text-white/60 text-center mb-4 sm:mb-6 text-sm sm:text-base">Saisie de la production</p>
+                    <h3 class="text-xl sm:text-2xl font-bold text-center mb-3 sm:mb-4">Producteur</h3>
+                    <p class="text-white/60 text-center mb-4 sm:mb-6 text-sm sm:text-base">Gestion de la production & des matières</p>
                     <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
                         <li class="flex items-center gap-2 sm:gap-3">
-                            <span class="text-amber-400 flex-shrink-0">✓</span>
-                            <span>Enregistrer sa production</span>
+                            <span class="text-green-400 flex-shrink-0">✓</span>
+                            <span>Saisir la production via tablette</span>
                         </li>
                         <li class="flex items-center gap-2 sm:gap-3">
-                            <span class="text-amber-400 flex-shrink-0">✓</span>
-                            <span>Préciser les matières utilisées</span>
+                            <span class="text-green-400 flex-shrink-0">✓</span>
+                            <span>Préciser les quantités de matières</span>
                         </li>
                         <li class="flex items-center gap-2 sm:gap-3">
-                            <span class="text-amber-400 flex-shrink-0">✓</span>
-                            <span>Suivre les stocks disponibles</span>
+                            <span class="text-green-400 flex-shrink-0">✓</span>
+                            <span>Consulter les stocks disponibles</span>
                         </li>
                         <li class="flex items-center gap-2 sm:gap-3">
-                            <span class="text-amber-400 flex-shrink-0">✓</span>
-                            <span>Voir l'historique de ses lots</span>
+                            <span class="text-green-400 flex-shrink-0">✓</span>
+                            <span>Suivi des bénéfices estimés</span>
                         </li>
                     </ul>
                 </div>
 
-                <!-- PDG -->
+                <!-- DG/PDG -->
                 <div class="glass rounded-2xl p-6 sm:p-8 card-hover border-2 border-bread-gold/30" data-aos="fade-up" data-aos-delay="400">
                     <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-bread-accent to-bread-gold rounded-full flex items-center justify-center text-3xl sm:text-4xl mx-auto mb-4 sm:mb-6">
                         👑
                     </div>
-                    <h3 class="text-xl sm:text-2xl font-bold text-center mb-3 sm:mb-4 gradient-text">PDG</h3>
+                    <h3 class="text-xl sm:text-2xl font-bold text-center mb-3 sm:mb-4 gradient-text">DG/PDG</h3>
                     <p class="text-white/60 text-center mb-4 sm:mb-6 text-sm sm:text-base">Contrôle total de l'entreprise</p>
                     <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
                         <li class="flex items-center gap-2 sm:gap-3">
@@ -639,6 +475,10 @@
                         <li class="flex items-center gap-2 sm:gap-3">
                             <span class="text-bread-gold flex-shrink-0">★</span>
                             <span>Gérer utilisateurs & produits</span>
+                        </li>
+                        <li class="flex items-center gap-2 sm:gap-3">
+                            <span class="text-bread-gold flex-shrink-0">★</span>
+                            <span>Introduire les stocks matières</span>
                         </li>
                     </ul>
                 </div>
@@ -795,35 +635,36 @@
                 </div>
                 <span class="font-bold text-lg sm:text-xl">EasyGest BP</span>
             </div>
-<p class="text-white/60 text-sm sm:text-base">© 2026 EasyGest BP. Powered By 
-    <a href="https://techforgesolution237.site" target="_blank" class="text-bread-gold hover:underline">TechForge Solutions</a>
-</p>
+            <p class="text-white/60 text-sm sm:text-base">© 2026 EasyGest BP. Powered By <a href="https://techforgesolution237.site" target="_blank" class="text-bread-gold hover:underline">TFS237</a></p>
         </div>
     </footer>
 
-    <!-- Scripts -->
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
-        // Initialisation AOS
-        AOS.init({
-            duration: 800,
-            once: true,
-            offset: 100
-        });
-
         // Preloader
-        window.addEventListener('load', () => {
-            const preloader = document.getElementById('preloader');
-            preloader.style.opacity = '0';
-            setTimeout(() => {
-                preloader.style.display = 'none';
-            }, 500);
+        window.addEventListener('load', () => { 
+            document.getElementById('preloader').style.opacity = '0'; 
+            setTimeout(() => document.getElementById('preloader').style.display = 'none', 500); 
         });
 
-        // Menu mobile
+        // AOS Animation
+        AOS.init({ duration: 800, once: true, offset: 50 });
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', () => { 
+            const navbar = document.getElementById('navbar');
+            if (window.pageYOffset > 100) {
+                navbar.classList.add('bg-bread-dark/95', 'backdrop-blur-xl', 'shadow-lg');
+            } else {
+                navbar.classList.remove('bg-bread-dark/95', 'backdrop-blur-xl', 'shadow-lg');
+            }
+        });
+
+        // Mobile menu
         const menuBtn = document.getElementById('menuBtn');
-        const mobileMenu = document.getElementById('mobileMenu');
         const closeMenu = document.getElementById('closeMenu');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const menuLinks = mobileMenu.querySelectorAll('a');
 
         menuBtn.addEventListener('click', () => {
             mobileMenu.classList.add('active');
@@ -833,29 +674,18 @@
             mobileMenu.classList.remove('active');
         });
 
-        // Navbar effet scroll
-        const navbar = document.getElementById('navbar');
-        window.addEventListener('scroll', () => {
-            if (window.scrollY > 80) {
-                navbar.classList.add('bg-bread-deeper', 'shadow-2xl');
-            } else {
-                navbar.classList.remove('bg-bread-deeper', 'shadow-2xl');
-            }
+        // Close menu when clicking on a link
+        menuLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('active');
+            });
         });
 
-        // Smooth scroll pour les ancres
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                if (this.getAttribute('href') !== '#') {
-                    e.preventDefault();
-                    const target = document.querySelector(this.getAttribute('href'));
-                    if (target) {
-                        target.scrollIntoView({
-                            behavior: 'smooth'
-                        });
-                    }
-                }
-            });
+        // Close menu when clicking outside
+        mobileMenu.addEventListener('click', (e) => {
+            if (e.target === mobileMenu) {
+                mobileMenu.classList.remove('active');
+            }
         });
     </script>
 </body>
