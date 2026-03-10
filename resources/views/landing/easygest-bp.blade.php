@@ -161,7 +161,7 @@
                 </div>
                 
                 <div class="flex items-center gap-3">
-                    <a href="https://play.google.com/store" target="_blank" class="hidden sm:block bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-4 sm:px-6 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-bread-gold/30 transition-all text-sm sm:text-base">
+                    <a href="https://play.google.com/store/apps/details?id=com.anonymous.easygestmobile" target="_blank" class="hidden sm:block bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-4 sm:px-6 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-bread-gold/30 transition-all text-sm sm:text-base">
                         Télécharger
                     </a>
                     

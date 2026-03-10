@@ -48,6 +48,120 @@
     .perf-good { color: #10b981; }
     .perf-warning { color: #f59e0b; }
     .perf-danger { color: #ef4444; }
+
+    /* ===================== */
+    /* MODAL MANQUANT STYLES */
+    /* ===================== */
+    #modalManquant {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        overflow-y: auto;
+    }
+    #modalManquant.open { display: flex; }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        backdrop-filter: blur(3px);
+    }
+
+    .modal-content {
+        position: relative;
+        background: white;
+        border-radius: 1.25rem;
+        width: 100%;
+        max-width: 560px;
+        margin: auto;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, #b45309, #d97706);
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 0.6rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border-radius: 0.5rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        border: none;
+    }
+    .tab-btn.active {
+        background: #d97706;
+        color: white;
+        box-shadow: 0 2px 8px rgba(217,119,6,0.4);
+    }
+    .tab-btn.inactive {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .tab-btn.inactive:hover { background: #e5e7eb; }
+
+    .form-label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.3rem;
+    }
+    .form-input {
+        width: 100%;
+        padding: 0.55rem 0.85rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.6rem;
+        font-size: 0.9rem;
+        transition: border-color 0.2s;
+        background: white;
+    }
+    .form-input:focus {
+        outline: none;
+        border-color: #d97706;
+    }
+    .form-input[readonly] {
+        background: #fef3c7;
+        color: #92400e;
+        font-weight: 700;
+        cursor: default;
+    }
+
+    .result-box {
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-top: 0.5rem;
+    }
+    .result-box.manquant { background: #fef2f2; border: 2px solid #fca5a5; }
+    .result-box.excedent { background: #f0fdf4; border: 2px solid #86efac; }
+    .result-box.exact    { background: #f0fdf4; border: 2px solid #86efac; }
+
+    .section-divider {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0.75rem 0;
+        color: #9ca3af;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .section-divider::before,
+    .section-divider::after {
+        content: '';
+        height: 1px;
+        background: #e5e7eb;
+    }
 </style>
 @endsection
 
@@ -79,6 +193,13 @@
                         <i class="fas fa-calculator mr-2"></i>
                         <span>{{ $isFrench ? 'Vue Résumée' : 'Summary View' }}</span>
                     </button>
+                    {{-- ===================== NOUVEAU BOUTON ===================== --}}
+                    <button onclick="openModalManquant()"
+                            class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all shadow-md font-semibold">
+                        <i class="fas fa-search-dollar mr-2"></i>
+                        {{ $isFrench ? 'Calculer Manquant' : 'Calculate Missing' }}
+                    </button>
+                    {{-- ========================================================= --}}
                     <a href="{{ route('pdg.flux.imprimer', request()->all()) }}" target="_blank"
                        class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all shadow-md">
                         <i class="fas fa-print mr-2"></i>{{ $isFrench ? 'Imprimer' : 'Print' }}
@@ -679,10 +800,264 @@
     </div>
 </div>
 
+{{-- ============================================================ --}}
+{{-- MODAL CALCULER MANQUANT                                      --}}
+{{-- ============================================================ --}}
+
+{{-- Données vendeurs encodées pour JS --}}
+@php
+    $vendeursData = [];
+    foreach($flux['flux'] ?? [] as $fluxVendeur) {
+        $vendeursData[] = [
+            'id'   => $fluxVendeur['vendeur']['id'] ?? '',
+            'nom'  => $fluxVendeur['vendeur']['nom'] ?? '',
+            'total'=> $fluxVendeur['total_ventes'] ?? 0,
+        ];
+    }
+@endphp
+
+<div id="modalManquant" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <!-- Backdrop -->
+    <div class="modal-backdrop" onclick="closeModalManquant()"></div>
+
+    <!-- Contenu -->
+    <div class="modal-content" style="z-index:1; margin: 1.5rem auto; align-self: flex-start;">
+
+        <!-- Header modal -->
+        <div class="modal-header">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-search-dollar text-white text-lg"></i>
+                </div>
+                <div>
+                    <h2 id="modalTitle" class="text-lg font-bold text-white">
+                        {{ $isFrench ? 'Calculer le Manquant' : 'Calculate Missing Amount' }}
+                    </h2>
+                    <p class="text-amber-100 text-xs">{{ $isFrench ? 'Vérification de caisse par vendeur' : 'Cash verification by seller' }}</p>
+                </div>
+            </div>
+            <button onclick="closeModalManquant()" class="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-all">
+                <i class="fas fa-times text-white"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-5">
+
+            <!-- Sélection du vendeur -->
+            <div>
+                <label class="form-label">
+                    <i class="fas fa-user mr-1 text-amber-600"></i>
+                    {{ $isFrench ? 'Vendeur *' : 'Seller *' }}
+                </label>
+                <select id="modalVendeurSelect" onchange="onVendeurChange()"
+                        class="form-input">
+                    <option value="">— {{ $isFrench ? 'Choisir un vendeur' : 'Choose a seller' }} —</option>
+                    @foreach($flux['flux'] ?? [] as $fluxVendeur)
+                    <option value="{{ $fluxVendeur['vendeur']['id'] ?? '' }}"
+                            data-total="{{ $fluxVendeur['total_ventes'] ?? 0 }}">
+                        {{ $fluxVendeur['vendeur']['nom'] }}
+                        ({{ number_format($fluxVendeur['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA)
+                    </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <!-- Tabs Simple / Détaillé -->
+            <div class="flex gap-2 bg-gray-100 rounded-xl p-1">
+                <button id="tabSimpleBtn" onclick="switchTab('simple')" class="tab-btn active">
+                    <i class="fas fa-bolt mr-1"></i>
+                    {{ $isFrench ? 'Simple' : 'Simple' }}
+                </button>
+                <button id="tabDetailBtn" onclick="switchTab('detail')" class="tab-btn inactive">
+                    <i class="fas fa-list-ul mr-1"></i>
+                    {{ $isFrench ? 'Détaillé' : 'Detailed' }}
+                </button>
+            </div>
+
+            <!-- ======================== -->
+            <!-- FORMULAIRE SIMPLE       -->
+            <!-- ======================== -->
+            <div id="tabSimple">
+                <div class="space-y-4">
+                    <!-- Valeur attendue (auto) -->
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-tag mr-1 text-amber-600"></i>
+                            {{ $isFrench ? 'Valeur attendue (Total des ventes)' : 'Expected value (Total sales)' }}
+                        </label>
+                        <input type="number" id="simpleAttendu" readonly placeholder="0"
+                               class="form-input">
+                        <p class="text-xs text-amber-700 mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            {{ $isFrench ? 'Rempli automatiquement selon le vendeur choisi' : 'Auto-filled based on selected seller' }}
+                        </p>
+                    </div>
+
+                    <!-- Valeur perçue -->
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-hand-holding-usd mr-1 text-green-600"></i>
+                            {{ $isFrench ? 'Valeur perçue (Montant reçu)' : 'Received amount' }}
+                        </label>
+                        <input type="number" id="simplePercu" placeholder="0" min="0"
+                               oninput="calcSimple()"
+                               class="form-input">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================== -->
+            <!-- FORMULAIRE DÉTAILLÉ     -->
+            <!-- ======================== -->
+            <div id="tabDetail" class="hidden">
+                <div class="space-y-3">
+                    <!-- Valeur attendue (auto) -->
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-tag mr-1 text-amber-600"></i>
+                            {{ $isFrench ? 'Valeur attendue (Total des ventes)' : 'Expected value (Total sales)' }}
+                        </label>
+                        <input type="number" id="detailAttendu" readonly placeholder="0"
+                               class="form-input">
+                    </div>
+
+                    <div class="section-divider">
+                        <span></span>
+                        <span>{{ $isFrench ? 'Fond de caisse' : 'Cash drawer' }}</span>
+                        <span></span>
+                    </div>
+
+                    <!-- Fond de caisse -->
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-cash-register mr-1 text-blue-600"></i>
+                            {{ $isFrench ? 'Montant remis en cash (espèces)' : 'Cash amount handed over' }}
+                        </label>
+                        <input type="number" id="detailCash" placeholder="0" min="0"
+                               oninput="calcDetail()"
+                               class="form-input">
+                    </div>
+
+                    <div class="section-divider">
+                        <span></span>
+                        <span>Mobile Money</span>
+                        <span></span>
+                    </div>
+
+                    <!-- MTN MoMo -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt mr-1 text-yellow-500"></i>
+                                MoMo {{ $isFrench ? 'Initial' : 'Initial' }}
+                            </label>
+                            <input type="number" id="detailMomoInit" placeholder="0" min="0"
+                                   oninput="calcDetail()"
+                                   class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt mr-1 text-yellow-600"></i>
+                                MoMo {{ $isFrench ? 'Final' : 'Final' }}
+                            </label>
+                            <input type="number" id="detailMomoFinal" placeholder="0" min="0"
+                                   oninput="calcDetail()"
+                                   class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="section-divider">
+                        <span></span>
+                        <span>Orange Money</span>
+                        <span></span>
+                    </div>
+
+                    <!-- OM -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt mr-1 text-orange-500"></i>
+                                OM {{ $isFrench ? 'Initial' : 'Initial' }}
+                            </label>
+                            <input type="number" id="detailOmInit" placeholder="0" min="0"
+                                   oninput="calcDetail()"
+                                   class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt mr-1 text-orange-600"></i>
+                                OM {{ $isFrench ? 'Final' : 'Final' }}
+                            </label>
+                            <input type="number" id="detailOmFinal" placeholder="0" min="0"
+                                   oninput="calcDetail()"
+                                   class="form-input">
+                        </div>
+                    </div>
+
+                    <!-- Formule rappel -->
+                    <div class="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500 border border-gray-200">
+                        <i class="fas fa-function mr-1 text-gray-400"></i>
+                        {{ $isFrench ? 'Formule' : 'Formula' }} :
+                        <span class="font-mono text-gray-700">
+                            (Cash + (MoMo Final − MoMo Init) + (OM Final − OM Init)) − Attendu
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================== -->
+            <!-- RÉSULTAT                -->
+            <!-- ======================== -->
+            <div id="modalResult" class="hidden">
+                <div id="modalResultBox" class="result-box">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-semibold text-gray-600">
+                            {{ $isFrench ? 'Attendu' : 'Expected' }}
+                        </span>
+                        <span id="resAttendu" class="font-bold text-gray-800 text-sm"></span>
+                    </div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-semibold text-gray-600">
+                            {{ $isFrench ? 'Perçu / Versé' : 'Received / Paid' }}
+                        </span>
+                        <span id="resPercu" class="font-bold text-gray-800 text-sm"></span>
+                    </div>
+                    <div class="border-t pt-3 flex items-center justify-between">
+                        <span id="resLabel" class="text-base font-bold"></span>
+                        <span id="resValeur" class="text-2xl font-bold"></span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer modal -->
+        <div class="px-6 pb-6 flex justify-end gap-3">
+            <button onclick="resetModal()"
+                    class="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-all">
+                <i class="fas fa-redo mr-2"></i>{{ $isFrench ? 'Réinitialiser' : 'Reset' }}
+            </button>
+            <button onclick="closeModalManquant()"
+                    class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-all">
+                <i class="fas fa-times mr-2"></i>{{ $isFrench ? 'Fermer' : 'Close' }}
+            </button>
+        </div>
+    </div>
+</div>
+
+{{-- ============================================================ --}}
+{{-- FIN MODAL                                                    --}}
+{{-- ============================================================ --}}
+
 <script>
 let currentView = 'card';
 const totalVendu = {{ $totalVendu ?? 0 }};
+let activeTab = 'simple';
 
+// ============================================================
+// VUES PRINCIPALES
+// ============================================================
 function showCardView() {
     document.getElementById('cardView').classList.remove('hidden');
     document.getElementById('tableView').classList.add('hidden');
@@ -787,6 +1162,136 @@ function setYesterday() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     document.querySelector('input[name="date"]').value = yesterday.toISOString().split('T')[0];
+}
+
+// ============================================================
+// MODAL MANQUANT
+// ============================================================
+
+function openModalManquant() {
+    document.getElementById('modalManquant').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModalManquant() {
+    document.getElementById('modalManquant').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// Fermer avec Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModalManquant();
+});
+
+function switchTab(tab) {
+    activeTab = tab;
+    const isSimple = tab === 'simple';
+
+    document.getElementById('tabSimple').classList.toggle('hidden', !isSimple);
+    document.getElementById('tabDetail').classList.toggle('hidden', isSimple);
+
+    document.getElementById('tabSimpleBtn').className = 'tab-btn ' + (isSimple ? 'active' : 'inactive');
+    document.getElementById('tabDetailBtn').className = 'tab-btn ' + (!isSimple ? 'active' : 'inactive');
+
+    // Masquer le résultat lors du changement d'onglet
+    document.getElementById('modalResult').classList.add('hidden');
+}
+
+function onVendeurChange() {
+    const sel = document.getElementById('modalVendeurSelect');
+    const opt = sel.options[sel.selectedIndex];
+    const total = opt && opt.dataset.total ? parseFloat(opt.dataset.total) : 0;
+
+    document.getElementById('simpleAttendu').value = total || '';
+    document.getElementById('detailAttendu').value = total || '';
+
+    // Recalculer si des valeurs sont déjà saisies
+    if (activeTab === 'simple') calcSimple();
+    else calcDetail();
+}
+
+function getAttendu() {
+    const v = parseFloat(document.getElementById(
+        activeTab === 'simple' ? 'simpleAttendu' : 'detailAttendu'
+    ).value) || 0;
+    return v;
+}
+
+function calcSimple() {
+    const attendu = getAttendu();
+    const percu   = parseFloat(document.getElementById('simplePercu').value) || 0;
+    if (attendu === 0 && percu === 0) {
+        document.getElementById('modalResult').classList.add('hidden');
+        return;
+    }
+    showModalResult(attendu, percu);
+}
+
+function calcDetail() {
+    const attendu   = getAttendu();
+    const cash      = parseFloat(document.getElementById('detailCash').value)      || 0;
+    const momoInit  = parseFloat(document.getElementById('detailMomoInit').value)  || 0;
+    const momoFinal = parseFloat(document.getElementById('detailMomoFinal').value) || 0;
+    const omInit    = parseFloat(document.getElementById('detailOmInit').value)    || 0;
+    const omFinal   = parseFloat(document.getElementById('detailOmFinal').value)   || 0;
+
+    const totalPercu = cash + (momoFinal - momoInit) + (omFinal - omInit);
+
+    if (attendu === 0 && totalPercu === 0) {
+        document.getElementById('modalResult').classList.add('hidden');
+        return;
+    }
+    showModalResult(attendu, totalPercu);
+}
+
+function showModalResult(attendu, percu) {
+    const diff = percu - attendu;  // positif = excédent, négatif = manquant
+    const manquant = -diff;        // positif = manquant
+
+    const box    = document.getElementById('modalResultBox');
+    const label  = document.getElementById('resLabel');
+    const valeur = document.getElementById('resValeur');
+
+    document.getElementById('resAttendu').textContent = formatNumber(attendu) + ' FCFA';
+    document.getElementById('resPercu').textContent   = formatNumber(percu)   + ' FCFA';
+
+    // Reset classes
+    box.className = 'result-box';
+
+    if (manquant > 0.5) {
+        box.classList.add('manquant');
+        label.textContent  = '⚠️ {{ $isFrench ? "Manquant" : "Missing" }}';
+        label.className    = 'text-base font-bold text-red-600';
+        valeur.textContent = '− ' + formatNumber(manquant) + ' FCFA';
+        valeur.className   = 'text-2xl font-bold text-red-600';
+    } else if (manquant < -0.5) {
+        box.classList.add('excedent');
+        label.textContent  = '✅ {{ $isFrench ? "Excédent" : "Surplus" }}';
+        label.className    = 'text-base font-bold text-green-600';
+        valeur.textContent = '+ ' + formatNumber(Math.abs(manquant)) + ' FCFA';
+        valeur.className   = 'text-2xl font-bold text-green-600';
+    } else {
+        box.classList.add('exact');
+        label.textContent  = '✅ {{ $isFrench ? "Caisse juste" : "Exact" }}';
+        label.className    = 'text-base font-bold text-green-600';
+        valeur.textContent = '0 FCFA';
+        valeur.className   = 'text-2xl font-bold text-green-600';
+    }
+
+    document.getElementById('modalResult').classList.remove('hidden');
+}
+
+function resetModal() {
+    document.getElementById('modalVendeurSelect').value = '';
+    ['simpleAttendu','simplePercu',
+     'detailAttendu','detailCash',
+     'detailMomoInit','detailMomoFinal',
+     'detailOmInit','detailOmFinal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('modalResult').classList.add('hidden');
+    switchTab('simple');
 }
 </script>
 @endsection
