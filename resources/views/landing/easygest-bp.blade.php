@@ -141,56 +141,80 @@
         </div>
     </div>
 
-    <!-- Navbar -->
-    <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
-            <div class="flex items-center justify-between">
-                <a href="#" class="flex items-center gap-2 sm:gap-3">
-                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-bread-accent to-bread-gold rounded-xl flex items-center justify-center shadow-lg pulse-gold">
-                        <span class="text-xl sm:text-2xl">🥐</span>
-                    </div>
-                    <p class="text-lg sm:text-xl font-bold">EasyGest BP</p>
-                </a>
-                
-                <!-- Desktop Menu -->
-                <div class="hidden md:flex items-center gap-8">
-                    <a href="#accueil" class="text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
-                    <a href="#fonctionnalites" class="text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
-                    <a href="#roles" class="text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
-                    <a href="#flux" class="text-white/80 hover:text-bread-gold transition-colors">Flux</a>
-                </div>
-                
-                <div class="flex items-center gap-3">
-                    <a href="https://play.google.com/store/apps/details?id=com.anonymous.easygestmobile" target="_blank" class="hidden sm:block bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-4 sm:px-6 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-bread-gold/30 transition-all text-sm sm:text-base">
-                        Télécharger
-                    </a>
-                    
-                    <!-- Mobile Menu Button -->
-                    <button id="menuBtn" class="md:hidden w-10 h-10 flex flex-col items-center justify-center gap-1.5">
-                        <span class="w-6 h-0.5 bg-white transition-all"></span>
-                        <span class="w-6 h-0.5 bg-white transition-all"></span>
-                        <span class="w-6 h-0.5 bg-white transition-all"></span>
-                    </button>
-                </div>
-            </div>
+   <!-- Navbar -->
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+    <div class="flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2 sm:gap-3">
+        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-bread-accent to-bread-gold rounded-xl flex items-center justify-center shadow-lg pulse-gold">
+          <span class="text-xl sm:text-2xl">🥐</span>
         </div>
-    </nav>
+        <p class="text-lg sm:text-xl font-bold">EasyGest BP</p>
+      </a>
 
-    <!-- Mobile Menu -->
-    <div id="mobileMenu" class="mobile-menu fixed top-0 right-0 w-full sm:w-80 h-full bg-bread-dark z-[60] md:hidden">
-        <div class="flex flex-col h-full p-6">
-            <button id="closeMenu" class="self-end text-3xl mb-8">&times;</button>
-            <div class="flex flex-col gap-6">
-                <a href="#accueil" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
-                <a href="#fonctionnalites" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
-                <a href="#roles" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
-                <a href="#flux" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Flux</a>
-                <a href="https://play.google.com/store" target="_blank" class="mt-4 bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-6 py-3 rounded-full font-semibold text-center">
-                    Télécharger
-                </a>
-            </div>
-        </div>
+      <!-- Desktop Menu -->
+      <div class="hidden md:flex items-center gap-8">
+        <a href="#accueil" class="text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
+        <a href="#fonctionnalites" class="text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
+        <a href="#roles" class="text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
+        <a href="#flux" class="text-white/80 hover:text-bread-gold transition-colors">Flux</a>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Bouton Mode DG -->
+        <a href="https://easygestbp.techforgesolution237.site/" target="_blank"
+          class="hidden sm:block bg-gradient-to-r from-blue-600 to-blue-400 text-white px-4 sm:px-5 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-400/30 transition-all text-sm sm:text-base whitespace-nowrap">
+          🖥️ Version Web DG
+        </a>
+        <!-- Bouton Mode Employé -->
+        <a href="https://easygestbp-employee.techforgesolution237.site/login" target="_blank"
+          class="hidden sm:block bg-gradient-to-r from-emerald-600 to-emerald-400 text-white px-4 sm:px-5 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-emerald-400/30 transition-all text-sm sm:text-base whitespace-nowrap">
+          👤 Version Web Employé
+        </a>
+        <!-- Bouton Télécharger -->
+        <a href="https://play.google.com/store/apps/details?id=com.anonymous.easygestmobile" target="_blank"
+          class="hidden sm:block bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-4 sm:px-6 py-2 sm:py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-bread-gold/30 transition-all text-sm sm:text-base">
+          Télécharger
+        </a>
+        <!-- Mobile Menu Button -->
+        <button id="menuBtn" class="md:hidden w-10 h-10 flex flex-col items-center justify-center gap-1.5">
+          <span class="w-6 h-0.5 bg-white transition-all"></span>
+          <span class="w-6 h-0.5 bg-white transition-all"></span>
+          <span class="w-6 h-0.5 bg-white transition-all"></span>
+        </button>
+      </div>
     </div>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div id="mobileMenu" class="mobile-menu fixed top-0 right-0 w-full sm:w-80 h-full bg-bread-dark z-[60] md:hidden">
+  <div class="flex flex-col h-full p-6">
+    <button id="closeMenu" class="self-end text-3xl mb-8">&times;</button>
+    <div class="flex flex-col gap-6">
+      <a href="#accueil" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Accueil</a>
+      <a href="#fonctionnalites" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Fonctionnalités</a>
+      <a href="#roles" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Rôles</a>
+      <a href="#flux" class="text-xl text-white/80 hover:text-bread-gold transition-colors">Flux</a>
+
+      <!-- Bouton Mode DG (Mobile) -->
+      <a href="https://easygestbp.techforgesolution237.site/" target="_blank"
+        class="mt-2 bg-gradient-to-r from-blue-600 to-blue-400 text-white px-6 py-3 rounded-full font-semibold text-center">
+        🖥️ Version Web DG
+      </a>
+      <!-- Bouton Mode Employé (Mobile) -->
+      <a href="https://easygestbp-employee.techforgesolution237.site/login" target="_blank"
+        class="bg-gradient-to-r from-emerald-600 to-emerald-400 text-white px-6 py-3 rounded-full font-semibold text-center">
+        👤 Version Web Employé
+      </a>
+      <!-- Bouton Télécharger (Mobile) -->
+      <a href="https://play.google.com/store" target="_blank"
+        class="bg-gradient-to-r from-bread-accent to-bread-gold text-bread-dark px-6 py-3 rounded-full font-semibold text-center">
+        Télécharger
+      </a>
+    </div>
+  </div>
+</div>
 
     <!-- Hero Section -->
     <section id="accueil" class="min-h-screen hero-gradient bread-pattern relative flex items-center overflow-hidden pt-20 sm:pt-0">
