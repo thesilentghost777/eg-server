@@ -4,1294 +4,513 @@
 
 @section('styles')
 <style>
-    .bread-gradient {
-        background: linear-gradient(135deg, #D4A574 0%, #C89968 50%, #B08554 100%);
-    }
-    
-    @media print {
-        .no-print { display: none !important; }
-        .print-full-width { width: 100% !important; }
-        body { font-size: 10pt; }
-    }
-    
-    /* Optimisation pour grands volumes - Vue compacte */
-    .compact-view .produit-card {
-        padding: 0.75rem !important;
-        margin-bottom: 0.5rem !important;
-    }
-    
-    .compact-view .metric {
-        font-size: 0.875rem !important;
-        padding: 0.5rem !important;
-    }
-    
-    /* Vue tableau pour grands volumes */
-    .table-view {
-        max-height: 600px;
-        overflow-y: auto;
-    }
-    
-    .sticky-header {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background: linear-gradient(135deg, #D4A574 0%, #C89968 50%, #B08554 100%);
-    }
-    
-    /* Mise en surbrillance des valeurs importantes */
-    .highlight-value {
-        background-color: #fef3c7;
-        font-weight: bold;
-    }
-    
-    /* Indicateur de performance */
-    .perf-good { color: #10b981; }
-    .perf-warning { color: #f59e0b; }
-    .perf-danger { color: #ef4444; }
-
-    /* ===================== */
-    /* MODAL MANQUANT STYLES */
-    /* ===================== */
-    #modalManquant {
-        display: none;
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        overflow-y: auto;
-    }
-    #modalManquant.open { display: flex; }
-
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.55);
-        backdrop-filter: blur(3px);
-    }
-
-    .modal-content {
-        position: relative;
-        background: white;
-        border-radius: 1.25rem;
-        width: 100%;
-        max-width: 560px;
-        margin: auto;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-        overflow: hidden;
-    }
-
-    .modal-header {
-        background: linear-gradient(135deg, #b45309, #d97706);
-        padding: 1.25rem 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .tab-btn {
-        flex: 1;
-        padding: 0.6rem 0.75rem;
-        font-size: 0.82rem;
-        font-weight: 600;
-        border-radius: 0.5rem;
-        transition: all 0.2s;
-        cursor: pointer;
-        border: none;
-    }
-    .tab-btn.active {
-        background: #d97706;
-        color: white;
-        box-shadow: 0 2px 8px rgba(217,119,6,0.4);
-    }
-    .tab-btn.inactive {
-        background: #f3f4f6;
-        color: #6b7280;
-    }
-    .tab-btn.inactive:hover { background: #e5e7eb; }
-
-    .form-label {
-        display: block;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 0.3rem;
-    }
-    .form-input {
-        width: 100%;
-        padding: 0.55rem 0.85rem;
-        border: 2px solid #e5e7eb;
-        border-radius: 0.6rem;
-        font-size: 0.9rem;
-        transition: border-color 0.2s;
-        background: white;
-    }
-    .form-input:focus {
-        outline: none;
-        border-color: #d97706;
-    }
-    .form-input[readonly] {
-        background: #fef3c7;
-        color: #92400e;
-        font-weight: 700;
-        cursor: default;
-    }
-
-    .result-box {
-        border-radius: 0.75rem;
-        padding: 1rem 1.25rem;
-        margin-top: 0.5rem;
-    }
-    .result-box.manquant { background: #fef2f2; border: 2px solid #fca5a5; }
-    .result-box.excedent { background: #f0fdf4; border: 2px solid #86efac; }
-    .result-box.exact    { background: #f0fdf4; border: 2px solid #86efac; }
-
-    .section-divider {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0.75rem 0;
-        color: #9ca3af;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .section-divider::before,
-    .section-divider::after {
-        content: '';
-        height: 1px;
-        background: #e5e7eb;
-    }
+    .table-scroll  { max-height: 600px; overflow-y: auto; }
+    .sticky-header { position: sticky; top: 0; z-index: 5;
+                     background: linear-gradient(135deg, #D4A574, #B08554); }
+    .form-row      { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .result-manquant { background: #fef2f2; border: 2px solid #fca5a5; border-radius: .75rem; padding: 1rem; }
+    .result-excedent { background: #f0fdf4; border: 2px solid #86efac; border-radius: .75rem; padding: 1rem; }
+    .result-exact    { background: #f0fdf4; border: 2px solid #86efac; border-radius: .75rem; padding: 1rem; }
+    @media print { .no-print { display: none !important; } }
 </style>
 @endsection
 
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-amber-50 via-white to-blue-50">
-    <div class="container mx-auto px-4 py-6 sm:py-8">
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 sm:p-8 mb-6 no-print">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div class="container mx-auto px-4 py-6">
+
+    {{-- HEADER --}}
+    <div class="bg-gradient-to-r from-amber-700 to-amber-600 rounded-2xl shadow-xl p-6 mb-6 no-print">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-white mb-1">
+                    <i class="fas fa-stream mr-2"></i>{{ $isFrench ? 'Flux Opérationnel' : 'Operational Flow' }}
+                </h1>
+                <p class="text-amber-100 text-sm">{{ $selectedDate ?? '' }}</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="document.getElementById('view-table').style.display='block'; document.getElementById('view-summary').style.display='none'; document.getElementById('view-manquant').style.display='none';"
+                        class="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold hover:bg-amber-50">
+                    <i class="fas fa-th-list mr-1"></i>{{ $isFrench ? 'Tableau' : 'Table' }}
+                </button>
+                <button onclick="document.getElementById('view-table').style.display='none'; document.getElementById('view-summary').style.display='block'; document.getElementById('view-manquant').style.display='none';"
+                        class="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold hover:bg-amber-50">
+                    <i class="fas fa-calculator mr-1"></i>{{ $isFrench ? 'Global' : 'Global' }}
+                </button>
+                <button onclick="document.getElementById('view-table').style.display='none'; document.getElementById('view-summary').style.display='none'; document.getElementById('view-manquant').style.display='block';"
+                        class="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600">
+                    <i class="fas fa-search-dollar mr-1"></i>{{ $isFrench ? 'Manquant' : 'Missing' }}
+                </button>
+                <a href="{{ route('pdg.flux.imprimer', request()->all()) }}" target="_blank"
+                   class="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold hover:bg-amber-50 no-print">
+                    <i class="fas fa-print mr-1"></i>{{ $isFrench ? 'Imprimer' : 'Print' }}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {{-- FILTRES --}}
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6 no-print">
+        <form method="GET" action="{{ route('pdg.flux') }}">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div>
-                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2">
-                        <i class="fas fa-stream mr-3"></i>
-                        {{ $isFrench ? 'Flux Opérationnel' : 'Operational Flow' }}
-                    </h1>
-                    <p class="text-amber-50 text-sm sm:text-base">
-                        {{ $isFrench ? 'Suivi des opérations -' : 'Operations tracking -' }} {{ $selectedDate ?? '' }}
-                    </p>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <i class="fas fa-calendar mr-1 text-amber-600"></i>{{ $isFrench ? 'Date' : 'Date' }}
+                    </label>
+                    <input type="date" name="date" value="{{ $selectedDate }}" required
+                           class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500 focus:outline-none">
                 </div>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="showCardView()" class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all">
-                        <i class="fas fa-th-large mr-2"></i>
-                        <span>{{ $isFrench ? 'Vue Cartes' : 'Card View' }}</span>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <i class="fas fa-user mr-1 text-blue-600"></i>{{ $isFrench ? 'Vendeur' : 'Seller' }}
+                    </label>
+                    <select name="vendeur_id" class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none">
+                        <option value="">{{ $isFrench ? 'Tous' : 'All' }}</option>
+                        @foreach($vendeurs ?? [] as $v)
+                            <option value="{{ $v->id }}" {{ $selectedVendeur == $v->id ? 'selected' : '' }}>{{ $v->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <i class="fas fa-box mr-1 text-green-600"></i>{{ $isFrench ? 'Produit' : 'Product' }}
+                    </label>
+                    <select name="produit_id" class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none">
+                        <option value="">{{ $isFrench ? 'Tous' : 'All' }}</option>
+                        @foreach($produits ?? [] as $p)
+                            <option value="{{ $p->id }}" {{ $selectedProduit == $p->id ? 'selected' : '' }}>{{ $p->nom }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex items-end gap-2">
+                    <button type="button" onclick="document.querySelector('input[name=date]').value=new Date().toISOString().split('T')[0]"
+                            class="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">
+                        <i class="fas fa-calendar-day mr-1"></i>{{ $isFrench ? "Auj." : "Today" }}
                     </button>
-                    <button onclick="showTableView()" class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all">
-                        <i class="fas fa-th-list mr-2"></i>
-                        <span>{{ $isFrench ? 'Vue Tableau' : 'Table View' }}</span>
+                    <button type="button" onclick="var d=new Date();d.setDate(d.getDate()-1);document.querySelector('input[name=date]').value=d.toISOString().split('T')[0]"
+                            class="flex-1 px-3 py-2 bg-gray-500 text-white text-sm rounded-lg hover:bg-gray-600">
+                        <i class="fas fa-calendar-minus mr-1"></i>{{ $isFrench ? "Hier" : "Yest." }}
                     </button>
-                    <button onclick="showSummaryView()" class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all">
-                        <i class="fas fa-calculator mr-2"></i>
-                        <span>{{ $isFrench ? 'Vue Résumée' : 'Summary View' }}</span>
-                    </button>
-                    {{-- ===================== NOUVEAU BOUTON ===================== --}}
-                    <button onclick="openModalManquant()"
-                            class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all shadow-md font-semibold">
-                        <i class="fas fa-search-dollar mr-2"></i>
-                        {{ $isFrench ? 'Calculer Manquant' : 'Calculate Missing' }}
-                    </button>
-                    {{-- ========================================================= --}}
-                    <a href="{{ route('pdg.flux.imprimer', request()->all()) }}" target="_blank"
-                       class="px-4 py-2 bg-white text-amber-700 rounded-lg hover:bg-amber-50 transition-all shadow-md">
-                        <i class="fas fa-print mr-2"></i>{{ $isFrench ? 'Imprimer' : 'Print' }}
-                    </a>
                 </div>
             </div>
+            <div class="flex gap-3">
+                <button type="submit" class="px-5 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+                    <i class="fas fa-search mr-1"></i>{{ $isFrench ? 'Rechercher' : 'Search' }}
+                </button>
+                <a href="{{ route('pdg.flux') }}" class="px-5 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                    <i class="fas fa-redo mr-1"></i>{{ $isFrench ? 'Reset' : 'Reset' }}
+                </a>
+            </div>
+        </form>
+    </div>
+
+    {{-- CARTES RÉSUMÉ --}}
+    @if(isset($flux['resume']))
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-green-500">
+            <p class="text-2xl font-bold text-gray-800">{{ count($flux['flux'] ?? []) }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $isFrench ? 'Vendeurs actifs' : 'Active sellers' }}</p>
         </div>
-
-        <!-- Filtres -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 no-print">
-            <form method="GET" action="{{ route('pdg.flux') }}" class="space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- Date -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-calendar mr-1 text-amber-600"></i>
-                            {{ $isFrench ? 'Date' : 'Date' }}
-                        </label>
-                        <input type="date" name="date" value="{{ $selectedDate }}" required
-                               class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500">
-                    </div>
-
-                    <!-- Vendeur -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-user mr-1 text-blue-600"></i>
-                            {{ $isFrench ? 'Vendeur' : 'Seller' }}
-                        </label>
-                        <select name="vendeur_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500">
-                            <option value="">{{ $isFrench ? 'Tous les vendeurs' : 'All sellers' }}</option>
-                            @foreach($vendeurs ?? [] as $vendeur)
-                                <option value="{{ $vendeur->id }}" {{ $selectedVendeur == $vendeur->id ? 'selected' : '' }}>
-                                    {{ $vendeur->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Produit -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-box mr-1 text-green-600"></i>
-                            {{ $isFrench ? 'Produit' : 'Product' }}
-                        </label>
-                        <select name="produit_id" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500">
-                            <option value="">{{ $isFrench ? 'Tous les produits' : 'All products' }}</option>
-                            @foreach($produits ?? [] as $produit)
-                                <option value="{{ $produit->id }}" {{ $selectedProduit == $produit->id ? 'selected' : '' }}>
-                                    {{ $produit->nom }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Raccourcis -->
-                    <div class="flex items-end space-x-2">
-                        <button type="button" onclick="setToday()" 
-                                class="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">
-                            <i class="fas fa-calendar-day mr-1"></i>
-                            {{ $isFrench ? 'Aujourd\'hui' : 'Today' }}
-                        </button>
-                        <button type="button" onclick="setYesterday()" 
-                                class="flex-1 px-3 py-2 bg-gray-500 text-white text-sm rounded-lg hover:bg-gray-600">
-                            <i class="fas fa-calendar-minus mr-1"></i>
-                            {{ $isFrench ? 'Hier' : 'Yesterday' }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex gap-3">
-                    <button type="submit" class="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-md">
-                        <i class="fas fa-search mr-2"></i>{{ $isFrench ? 'Rechercher' : 'Search' }}
-                    </button>
-                    <a href="{{ route('pdg.flux') }}" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 shadow-md">
-                        <i class="fas fa-redo mr-2"></i>{{ $isFrench ? 'Réinitialiser' : 'Reset' }}
-                    </a>
-                </div>
-            </form>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-blue-500">
+            <p class="text-lg font-bold text-gray-800">{{ number_format($flux['resume']['total_ventes'] ?? 0, 0, ',', ' ') }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $isFrench ? 'Total ventes (FCFA)' : 'Total sales (FCFA)' }}</p>
         </div>
-
-        <!-- Résumé Global -->
-        @if(isset($flux['resume']))
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-users text-3xl text-green-500"></i>
-                    <span class="text-3xl font-bold text-gray-800">{{ count($flux['flux'] ?? []) }}</span>
-                </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Vendeurs Actifs' : 'Active Sellers' }}</h3>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-shopping-cart text-3xl text-blue-500"></i>
-                    <span class="text-2xl font-bold text-gray-800">{{ number_format($flux['resume']['total_ventes'] ?? 0, 0, ',', ' ') }}</span>
-                </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Valeur Totale (FCFA)' : 'Total Value (FCFA)' }}</h3>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-boxes text-3xl text-purple-500"></i>
-                    <span class="text-3xl font-bold text-gray-800">{{ $flux['resume']['total_produits'] ?? 0 }}</span>
-                </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Produits Vendus' : 'Products Sold' }}</h3>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
-                <div class="flex items-center justify-between mb-2">
-                    <i class="fas fa-truck text-3xl text-orange-500"></i>
-                    <span class="text-3xl font-bold text-gray-800">{{ $flux['resume']['total_receptions'] ?? 0 }}</span>
-                </div>
-                <h3 class="text-sm font-semibold text-gray-600">{{ $isFrench ? 'Réceptions Jour' : 'Daily Receptions' }}</h3>
-            </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-purple-500">
+            <p class="text-2xl font-bold text-gray-800">{{ $flux['resume']['total_produits'] ?? 0 }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $isFrench ? 'Produits vendus' : 'Products sold' }}</p>
         </div>
-        @endif
-
-        <!-- Vue Cartes (par défaut) -->
-        <div id="cardView" class="space-y-6">
-            @forelse($flux['flux'] ?? [] as $fluxVendeur)
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <!-- En-tête Vendeur -->
-                <div class="flex items-center justify-between mb-6 pb-4 border-b-2 border-amber-200">
-                    <div class="flex items-center space-x-4">
-                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                            <i class="fas fa-user text-white text-xl"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-xl font-bold text-gray-800">{{ $fluxVendeur['vendeur']['nom'] }}</h2>
-                            <p class="text-sm text-gray-500">{{ ucfirst(str_replace('_', ' ', $fluxVendeur['vendeur']['role'])) }}</p>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-sm text-gray-500">{{ $isFrench ? 'Valeur Totale' : 'Total Value' }}</p>
-                        <p class="text-2xl font-bold text-amber-600">{{ number_format($fluxVendeur['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA</p>
-                    </div>
-                </div>
-
-                <!-- Produits -->
-                <div class="space-y-3">
-                    @forelse($fluxVendeur['produits'] ?? [] as $produitFlux)
-                    <div class="produit-card bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                        <div class="flex justify-between items-start mb-3">
-                            <div>
-                                <h4 class="font-bold text-gray-800 text-lg">{{ $produitFlux['produit_nom'] ?? $produitFlux['produit'] ?? 'Produit' }}</h4>
-                                <p class="text-sm text-gray-600">Prix unitaire: {{ number_format($produitFlux['prix_unitaire'] ?? 0, 0, ',', ' ') }} FCFA</p>
-                            </div>
-                            <span class="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-bold">
-                                {{ $produitFlux['quantite_vendue'] ?? 0 }} {{ $isFrench ? 'vendus' : 'sold' }}
-                            </span>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            <!-- Réception du jour -->
-                            <div class="metric bg-blue-50 p-3 rounded-lg">
-                                <p class="text-xs text-gray-600 mb-1">
-                                    <i class="fas fa-truck text-blue-600 mr-1"></i>
-                                    {{ $isFrench ? 'Réception' : 'Reception' }}
-                                </p>
-                                <p class="text-xl font-bold text-blue-600">{{ $produitFlux['quantite_recue'] ?? 0 }}</p>
-                            </div>
-
-                            <!-- Stock Initial -->
-                            <div class="metric bg-purple-50 p-3 rounded-lg">
-                                <p class="text-xs text-gray-600 mb-1">
-                                    <i class="fas fa-box-open text-purple-600 mr-1"></i>
-                                    {{ $isFrench ? 'Stock Initial' : 'Initial Stock' }}
-                                </p>
-                                <p class="text-xl font-bold text-purple-600">{{ $produitFlux['quantite_trouvee'] ?? 0 }}</p>
-                            </div>
-
-                            <!-- Vendus -->
-                            <div class="metric bg-green-50 p-3 rounded-lg">
-                                <p class="text-xs text-gray-600 mb-1">
-                                    <i class="fas fa-shopping-cart text-green-600 mr-1"></i>
-                                    {{ $isFrench ? 'Vendus' : 'Sold' }}
-                                </p>
-                                <p class="text-xl font-bold text-green-600">{{ $produitFlux['quantite_vendue'] ?? 0 }}</p>
-                            </div>
-
-                            <!-- Retours -->
-                            <div class="metric bg-orange-50 p-3 rounded-lg">
-                                <p class="text-xs text-gray-600 mb-1">
-                                    <i class="fas fa-undo text-orange-600 mr-1"></i>
-                                    {{ $isFrench ? 'Retours' : 'Returns' }}
-                                </p>
-                                <p class="text-xl font-bold text-orange-600">{{ $produitFlux['quantite_retour'] ?? 0 }}</p>
-                            </div>
-
-                            <!-- Stock Final -->
-                            <div class="metric bg-gray-100 p-3 rounded-lg">
-                                <p class="text-xs text-gray-600 mb-1">
-                                    <i class="fas fa-boxes text-gray-600 mr-1"></i>
-                                    {{ $isFrench ? 'Stock Final' : 'Final Stock' }}
-                                </p>
-                                <p class="text-xl font-bold text-gray-700">{{ $produitFlux['quantite_restante'] ?? 0 }}</p>
-                            </div>
-                        </div>
-
-                          
-                    </div>
-                    @empty
-                    <p class="text-center text-gray-500 py-4">{{ $isFrench ? 'Aucun produit' : 'No products' }}</p>
-                    @endforelse
-                </div>
-            </div>
-            @empty
-            <div class="bg-white rounded-xl shadow-lg p-12 text-center">
-                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
-                <p class="text-xl text-gray-500">{{ $isFrench ? 'Aucune activité pour cette période' : 'No activity for this period' }}</p>
-            </div>
-            @endforelse
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-orange-500">
+            <p class="text-2xl font-bold text-gray-800">{{ $flux['resume']['total_receptions'] ?? 0 }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $isFrench ? 'Réceptions' : 'Receptions' }}</p>
         </div>
+    </div>
+    @endif
 
-        <!-- Vue Tableau -->
-        <div id="tableView" class="hidden bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="table-view">
+    {{-- ═══════════════════════════════════════════════════════ --}}
+    {{-- VUE TABLEAU                                            --}}
+    {{-- ═══════════════════════════════════════════════════════ --}}
+    <div id="view-table" style="display:block;">
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="table-scroll">
                 <table class="w-full text-sm">
-                    <thead class="sticky-header text-blue-600">
+                    <thead class="sticky-header text-white">
                         <tr>
-                            <th class="px-3 py-2 text-left">{{ $isFrench ? 'Vendeur' : 'Seller' }}</th>
-                            <th class="px-3 py-2 text-left">{{ $isFrench ? 'Produit' : 'Product' }}</th>
-                            <th class="px-3 py-2 text-center">{{ $isFrench ? 'Réception' : 'Reception' }}</th>
-                            <th class="px-3 py-2 text-center">{{ $isFrench ? 'Stock Ini.' : 'Init. Stock' }}</th>
-                            <th class="px-3 py-2 text-center">{{ $isFrench ? 'Vendus' : 'Sold' }}</th>
-                            <th class="px-3 py-2 text-center">{{ $isFrench ? 'Retours' : 'Returns' }}</th>
-                            <th class="px-3 py-2 text-center">{{ $isFrench ? 'Stock Fin.' : 'Final Stock' }}</th>
-                            <th class="px-3 py-2 text-right">{{ $isFrench ? 'Valeur' : 'Value' }}</th>
+                            <th class="px-4 py-3 text-left">{{ $isFrench ? 'Vendeur' : 'Seller' }}</th>
+                            <th class="px-4 py-3 text-left">{{ $isFrench ? 'Produit' : 'Product' }}</th>
+                            <th class="px-4 py-3 text-center">{{ $isFrench ? 'Reçu' : 'Received' }}</th>
+                            <th class="px-4 py-3 text-center">{{ $isFrench ? 'Stock Ini.' : 'Init. Stock' }}</th>
+                            <th class="px-4 py-3 text-center">{{ $isFrench ? 'Vendus' : 'Sold' }}</th>
+                            <th class="px-4 py-3 text-center">{{ $isFrench ? 'Retours' : 'Returns' }}</th>
+                            <th class="px-4 py-3 text-center">{{ $isFrench ? 'Stock Fin.' : 'Final Stock' }}</th>
+                            <th class="px-4 py-3 text-right">{{ $isFrench ? 'Valeur (FCFA)' : 'Value (FCFA)' }}</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        @foreach($flux['flux'] ?? [] as $fluxVendeur)
-                            @foreach($fluxVendeur['produits'] ?? [] as $produitFlux)
-                            @php
-                                $total_dispo = ($produitFlux['quantite_recue'] ?? 0) + ($produitFlux['quantite_trouvee'] ?? 0);
-                                $taux = $total_dispo > 0 ? (($produitFlux['quantite_vendue'] ?? 0) / $total_dispo) * 100 : 0;
-                            @endphp
+                    <tbody class="divide-y divide-gray-100">
+                        @forelse($flux['flux'] ?? [] as $fv)
+                            @foreach($fv['produits'] ?? [] as $pf)
                             <tr class="hover:bg-amber-50">
-                                <td class="px-3 py-2">{{ $fluxVendeur['vendeur']['nom'] }}</td>
-                                <td class="px-3 py-2 font-semibold">{{ $produitFlux['produit_nom'] ?? '' }}-{{ $produitFlux['prix_unitaire'] ?? '' }}</td>
-                                <td class="px-3 py-2 text-center font-bold text-blue-600">{{ $produitFlux['quantite_recue'] ?? 0 }}</td>
-                                <td class="px-3 py-2 text-center">{{ $produitFlux['quantite_trouvee'] ?? 0 }}</td>
-                                <td class="px-3 py-2 text-center font-bold text-green-600">{{ $produitFlux['quantite_vendue'] ?? 0 }}</td>
-                                <td class="px-3 py-2 text-center text-orange-600">{{ $produitFlux['quantite_retour'] ?? 0 }}</td>
-                                <td class="px-3 py-2 text-center">{{ $produitFlux['quantite_restante'] ?? 0 }}</td>
-                                <td class="px-3 py-2 text-right font-bold">{{ number_format($produitFlux['valeur_vente'] ?? 0, 0, ',', ' ') }}</td>
-                                
+                                <td class="px-4 py-2 text-gray-800 font-medium">{{ $fv['vendeur']['nom'] }}</td>
+                                <td class="px-4 py-2 font-semibold text-gray-900">
+                                    {{ $pf['produit_nom'] ?? '' }}
+                                    @if(!empty($pf['prix_unitaire']))
+                                    <span class="text-xs text-gray-400 ml-1">{{ number_format($pf['prix_unitaire'], 0, ',', ' ') }}F</span>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-2 text-center font-bold text-blue-600">{{ $pf['quantite_recue'] ?? 0 }}</td>
+                                <td class="px-4 py-2 text-center text-purple-600">{{ $pf['quantite_trouvee'] ?? 0 }}</td>
+                                <td class="px-4 py-2 text-center font-bold text-green-600">{{ $pf['quantite_vendue'] ?? 0 }}</td>
+                                <td class="px-4 py-2 text-center text-orange-500">{{ $pf['quantite_retour'] ?? 0 }}</td>
+                                <td class="px-4 py-2 text-center text-gray-600">{{ $pf['quantite_restante'] ?? 0 }}</td>
+                                <td class="px-4 py-2 text-right font-bold text-gray-800">{{ number_format($pf['valeur_vente'] ?? 0, 0, ',', ' ') }}</td>
                             </tr>
                             @endforeach
-                        @endforeach
+                        @empty
+                        <tr><td colspan="8" class="px-4 py-10 text-center text-gray-400">
+                            <i class="fas fa-inbox text-3xl block mb-2"></i>
+                            {{ $isFrench ? 'Aucune activité' : 'No activity' }}
+                        </td></tr>
+                        @endforelse
                     </tbody>
+                    @if(!empty($flux['flux']))
+                    @php
+                        $tR=0;$tI=0;$tV=0;$tRe=0;$tF=0;$tVal=0;
+                        foreach($flux['flux'] as $fv){ foreach($fv['produits']??[] as $pf){
+                            $tR+=$pf['quantite_recue']??0; $tI+=$pf['quantite_trouvee']??0;
+                            $tV+=$pf['quantite_vendue']??0; $tRe+=$pf['quantite_retour']??0;
+                            $tF+=$pf['quantite_restante']??0; $tVal+=$pf['valeur_vente']??0;
+                        }}
+                    @endphp
+                    <tfoot class="bg-gray-800 text-white text-sm font-bold">
+                        <tr>
+                            <td colspan="2" class="px-4 py-3">TOTAUX</td>
+                            <td class="px-4 py-3 text-center text-blue-300">{{ $tR }}</td>
+                            <td class="px-4 py-3 text-center text-purple-300">{{ $tI }}</td>
+                            <td class="px-4 py-3 text-center text-green-300">{{ $tV }}</td>
+                            <td class="px-4 py-3 text-center text-orange-300">{{ $tRe }}</td>
+                            <td class="px-4 py-3 text-center">{{ $tF }}</td>
+                            <td class="px-4 py-3 text-right text-yellow-300">{{ number_format($tVal, 0, ',', ' ') }}</td>
+                        </tr>
+                    </tfoot>
+                    @endif
                 </table>
             </div>
         </div>
+    </div>
 
-        <!-- Vue Résumée CORRIGÉE -->
-        <!-- Vue Résumée avec DEBUG -->
-<div id="summaryView" class="hidden">
+    {{-- ═══════════════════════════════════════════════════════ --}}
+    {{-- VUE GLOBALE                                            --}}
+    {{-- ═══════════════════════════════════════════════════════ --}}
     @php
-        // ========================================
-        // SYSTÈME DE DEBUG COMPLET
-        // ========================================
-        $totalVenduMethode1 = 0;      // Calcul comme getFluxParVendeur
-        $totalVenduMethode2 = 0;      // Calcul actuel de la vue
-        
-        $valeurReceptions = 0;
-        $valeurRetours = 0;
-        $valeurArrivee = 0;
-        $valeurSortie = 0;
-        
-        $totalStockInitialQte = 0;
-        $totalStockFinalQte = 0;
-        $totalReceptionsQte = 0;
-        $totalRetoursQte = 0;
-        
-        $debug = [];
-        $produitsAnalyses = 0;
-        
-        foreach($flux['flux'] ?? [] as $fluxVendeur) {
-            foreach($fluxVendeur['produits'] ?? [] as $produitFlux) {
-                $produitsAnalyses++;
-                
-                $quantiteRecue = $produitFlux['quantite_recue'] ?? 0;
-                $quantiteRetour = $produitFlux['quantite_retour'] ?? 0;
-                $quantiteTrouvee = $produitFlux['quantite_trouvee'] ?? 0;
-                $quantiteRestante = $produitFlux['quantite_restante'] ?? 0;
-                $prixUnitaire = $produitFlux['prix_unitaire'] ?? 0;
-                $quantiteVendue = $produitFlux['quantite_vendue'] ?? 0;
-                $valeurVente = $produitFlux['valeur_vente'] ?? 0;
-                
-                // ============================================
-                // MÉTHODE 1 : Comme dans getFluxParVendeur
-                // ============================================
-                $qteVendueCalculee = max(0, $quantiteTrouvee + $quantiteRecue - $quantiteRetour - $quantiteRestante);
-                $valeur1 = $qteVendueCalculee * $prixUnitaire;
-                $totalVenduMethode1 += $valeur1;
-                
-                // ============================================
-                // MÉTHODE 2 : Calcul actuel de la vue
-                // ============================================
-                $valArrivee = $quantiteTrouvee * $prixUnitaire;
-                $valRecep = $quantiteRecue * $prixUnitaire;
-                $valRetour = $quantiteRetour * $prixUnitaire;
-                $valSortie = $quantiteRestante * $prixUnitaire;
-                $valeur2 = $valArrivee + $valRecep - $valRetour - $valSortie;
-                
-                // Accumuler pour méthode 2
-                $valeurReceptions += $valRecep;
-                $valeurRetours += $valRetour;
-                $valeurArrivee += $valArrivee;
-                $valeurSortie += $valSortie;
-                
-                // Quantités pour stats
-                $totalReceptionsQte += $quantiteRecue;
-                $totalRetoursQte += $quantiteRetour;
-                $totalStockInitialQte += $quantiteTrouvee;
-                $totalStockFinalQte += $quantiteRestante;
-                
-                // ============================================
-                // DÉTECTER LES DIFFÉRENCES
-                // ============================================
-                $difference = abs($valeur1 - $valeur2);
-                
-                // Capturer TOUS les produits avec activité OU différence
-                if ($difference > 0.01 || $quantiteTrouvee > 0 || $quantiteRecue > 0 || $quantiteRetour > 0 || $quantiteRestante > 0) {
-                    $debug[] = [
-                        'produit' => $produitFlux['produit_nom'] ?? 'N/A',
-                        'prix' => $prixUnitaire,
-                        'trouve' => $quantiteTrouvee,
-                        'recu' => $quantiteRecue,
-                        'retour' => $quantiteRetour,
-                        'restant' => $quantiteRestante,
-                        'qte_vendue_flux' => $quantiteVendue,
-                        'valeur_vente_flux' => $valeurVente,
-                        'qte_calculee' => $qteVendueCalculee,
-                        'methode1' => $valeur1,
-                        'methode2' => $valeur2,
-                        'difference' => $valeur1 - $valeur2,
-                        'has_diff' => $difference > 0.01,
-                    ];
-                }
-            }
-        }
-        
-        $totalVenduMethode2 = $valeurArrivee + $valeurReceptions - $valeurRetours - $valeurSortie;
-        $differenceGlobale = $totalVenduMethode1 - $totalVenduMethode2;
-        
-        // Récupérer le total du résumé pour comparaison
-        $totalResumeOfficial = $flux['resume']['total_ventes'] ?? 0;
+        $gI=0;$gR=0;$gRe=0;$gF=0;$gIq=0;$gRq=0;$gReq=0;$gFq=0;
+        foreach($flux['flux']??[] as $fv){ foreach($fv['produits']??[] as $pf){
+            $pu=$pf['prix_unitaire']??0;
+            $gI+=($pf['quantite_trouvee']??0)*$pu;  $gIq+=$pf['quantite_trouvee']??0;
+            $gR+=($pf['quantite_recue']??0)*$pu;    $gRq+=$pf['quantite_recue']??0;
+            $gRe+=($pf['quantite_retour']??0)*$pu;  $gReq+=$pf['quantite_retour']??0;
+            $gF+=($pf['quantite_restante']??0)*$pu; $gFq+=$pf['quantite_restante']??0;
+        }}
+        $gV=$gI+$gR-$gRe-$gF; $gVq=$gIq+$gRq-$gReq-$gFq;
     @endphp
-    
-    <div class="space-y-6">
-        
-        <!-- ========================================== -->
-        <!-- PANNEAU DE DEBUG DÉTAILLÉ -->
-        <!-- ========================================== -->
-        <div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-orange-300 rounded-xl shadow-lg p-6">
-            <h3 class="text-2xl font-bold text-orange-800 mb-4 flex items-center">
-                <i class="fas fa-bug mr-3"></i>
-                🔍 PANNEAU DE DEBUG - ANALYSE DES CALCULS
-            </h3>
-            
-            <!-- Résumé des totaux -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="bg-white rounded-lg p-4 border-2 border-blue-300">
-                    <p class="text-sm text-gray-600 mb-1">Total Résumé Officiel (Header)</p>
-                    <p class="text-2xl font-bold text-blue-600">{{ number_format($totalResumeOfficial, 0, ',', ' ') }} FCFA</p>
-                    <p class="text-xs text-gray-500">($flux['resume']['total_ventes'])</p>
-                </div>
-                
-                <div class="bg-white rounded-lg p-4 border-2 border-green-300">
-                    <p class="text-sm text-gray-600 mb-1">Méthode 1 (Qté × Prix)</p>
-                    <p class="text-2xl font-bold text-green-600">{{ number_format($totalVenduMethode1, 0, ',', ' ') }} FCFA</p>
-                    <p class="text-xs text-gray-500">Σ(quantite_vendue × prix)</p>
-                </div>
-                
-                <div class="bg-white rounded-lg p-4 border-2 border-purple-300">
-                    <p class="text-sm text-gray-600 mb-1">Méthode 2 (Flux financier)</p>
-                    <p class="text-2xl font-bold text-purple-600">{{ number_format($totalVenduMethode2, 0, ',', ' ') }} FCFA</p>
-                    <p class="text-xs text-gray-500">Arrivée + Récep - Retours - Sortie</p>
-                </div>
+
+    <div id="view-summary" style="display:none;" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl shadow p-5 border-l-4 border-purple-500">
+                <p class="text-xs text-gray-500">{{ $isFrench ? 'Stock Initial' : 'Initial Stock' }}</p>
+                <p class="text-xl font-bold text-purple-600 mt-1">{{ number_format($gI, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-gray-400">{{ $gIq }} {{ $isFrench ? 'unités' : 'units' }}</p>
             </div>
-            
-            <!-- Différences -->
-            <div class="bg-white rounded-lg p-4 mb-6">
-                <h4 class="font-bold text-gray-800 mb-3">📊 Analyse des différences :</h4>
-                <div class="space-y-2 text-sm">
-                    <div class="flex justify-between">
-                        <span>Différence Officiel vs Méthode 1 :</span>
-                        <span class="font-bold {{ abs($totalResumeOfficial - $totalVenduMethode1) > 0.01 ? 'text-red-600' : 'text-green-600' }}">
-                            {{ number_format($totalResumeOfficial - $totalVenduMethode1, 2, ',', ' ') }} FCFA
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Différence Officiel vs Méthode 2 :</span>
-                        <span class="font-bold {{ abs($totalResumeOfficial - $totalVenduMethode2) > 0.01 ? 'text-red-600' : 'text-green-600' }}">
-                            {{ number_format($totalResumeOfficial - $totalVenduMethode2, 2, ',', ' ') }} FCFA
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Différence Méthode 1 vs Méthode 2 :</span>
-                        <span class="font-bold {{ abs($differenceGlobale) > 0.01 ? 'text-red-600' : 'text-green-600' }}">
-                            {{ number_format($differenceGlobale, 2, ',', ' ') }} FCFA
-                        </span>
-                    </div>
-                </div>
-                
-                <div class="mt-4 p-3 bg-gray-100 rounded">
-                    <p class="text-xs text-gray-600 mb-1">Nombre de produits analysés : <strong>{{ $produitsAnalyses }}</strong></p>
-                    <p class="text-xs text-gray-600">Produits dans le tableau debug : <strong>{{ count($debug) }}</strong></p>
-                </div>
+            <div class="bg-white rounded-xl shadow p-5 border-l-4 border-blue-500">
+                <p class="text-xs text-gray-500">{{ $isFrench ? 'Réceptions' : 'Receptions' }}</p>
+                <p class="text-xl font-bold text-blue-600 mt-1">{{ number_format($gR, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-gray-400">{{ $gRq }} {{ $isFrench ? 'unités' : 'units' }}</p>
             </div>
-            
-            <!-- Formule détaillée Méthode 2 -->
-            <div class="bg-blue-50 rounded-lg p-4 mb-6">
-                <h4 class="font-bold text-blue-800 mb-2">🧮 Détail du calcul Méthode 2 :</h4>
-                <div class="text-sm space-y-1">
-                    <p>Valeur Arrivée (Stock Initial × Prix) : <strong>{{ number_format($valeurArrivee, 0, ',', ' ') }} FCFA</strong></p>
-                    <p>Valeur Réceptions (Qté Reçue × Prix) : <strong>+ {{ number_format($valeurReceptions, 0, ',', ' ') }} FCFA</strong></p>
-                    <p>Valeur Retours (Qté Retour × Prix) : <strong>- {{ number_format($valeurRetours, 0, ',', ' ') }} FCFA</strong></p>
-                    <p>Valeur Sortie (Stock Final × Prix) : <strong>- {{ number_format($valeurSortie, 0, ',', ' ') }} FCFA</strong></p>
-                    <hr class="my-2">
-                    <p class="text-lg font-bold text-blue-600">
-                        = {{ number_format($totalVenduMethode2, 0, ',', ' ') }} FCFA
-                    </p>
-                </div>
+            <div class="bg-white rounded-xl shadow p-5 border-l-4 border-orange-500">
+                <p class="text-xs text-gray-500">{{ $isFrench ? 'Retours' : 'Returns' }}</p>
+                <p class="text-xl font-bold text-orange-600 mt-1">{{ number_format($gRe, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-gray-400">{{ $gReq }} {{ $isFrench ? 'unités' : 'units' }}</p>
             </div>
-            
-            <!-- Tableau détaillé des produits -->
-            @if(count($debug) > 0)
-            <div class="bg-white rounded-lg overflow-hidden">
-                <div class="bg-gray-800 text-white p-3">
-                    <h4 class="font-bold">📋 Détail par produit ({{ count($debug) }} produits)</h4>
-                </div>
-                <div class="overflow-x-auto" style="max-height: 500px; overflow-y: auto;">
-                    <table class="w-full text-xs">
-                        <thead class="bg-gray-200 sticky top-0">
-                            <tr>
-                                <th class="p-2 text-left">Produit</th>
-                                <th class="p-2 text-right">Prix</th>
-                                <th class="p-2 text-center bg-purple-100">T</th>
-                                <th class="p-2 text-center bg-blue-100">R</th>
-                                <th class="p-2 text-center bg-orange-100">Ret</th>
-                                <th class="p-2 text-center bg-gray-100">Rest</th>
-                                <th class="p-2 text-center bg-green-100">Qté V. (Flux)</th>
-                                <th class="p-2 text-right bg-green-100">Val. (Flux)</th>
-                                <th class="p-2 text-center bg-yellow-100">Qté Calc</th>
-                                <th class="p-2 text-right bg-yellow-100">M1</th>
-                                <th class="p-2 text-right bg-purple-100">M2</th>
-                                <th class="p-2 text-right">Diff</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($debug as $d)
-                            <tr class="border-t {{ $d['has_diff'] ? 'bg-red-50' : '' }} hover:bg-yellow-50">
-                                <td class="p-2">
-                                    {{ $d['produit'] }}
-                                    @if($d['has_diff'])
-                                        <span class="ml-1 text-red-600">⚠️</span>
-                                    @endif
-                                </td>
-                                <td class="p-2 text-right font-semibold">{{ number_format($d['prix'], 0, ',', ' ') }}</td>
-                                <td class="p-2 text-center bg-purple-50">{{ $d['trouve'] }}</td>
-                                <td class="p-2 text-center bg-blue-50">{{ $d['recu'] }}</td>
-                                <td class="p-2 text-center bg-orange-50">{{ $d['retour'] }}</td>
-                                <td class="p-2 text-center bg-gray-50">{{ $d['restant'] }}</td>
-                                <td class="p-2 text-center bg-green-50 font-bold">{{ $d['qte_vendue_flux'] }}</td>
-                                <td class="p-2 text-right bg-green-50">{{ number_format($d['valeur_vente_flux'], 0, ',', ' ') }}</td>
-                                <td class="p-2 text-center bg-yellow-50 font-bold">{{ $d['qte_calculee'] }}</td>
-                                <td class="p-2 text-right bg-yellow-50">{{ number_format($d['methode1'], 0, ',', ' ') }}</td>
-                                <td class="p-2 text-right bg-purple-50">{{ number_format($d['methode2'], 0, ',', ' ') }}</td>
-                                <td class="p-2 text-right font-bold {{ $d['has_diff'] ? 'text-red-600' : 'text-green-600' }}">
-                                    {{ number_format($d['difference'], 2, ',', ' ') }}
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot class="bg-gray-800 text-white font-bold">
-                            <tr>
-                                <td colspan="9" class="p-2 text-right">TOTAUX :</td>
-                                <td class="p-2 text-right">{{ number_format($totalVenduMethode1, 0, ',', ' ') }}</td>
-                                <td class="p-2 text-right">{{ number_format($totalVenduMethode2, 0, ',', ' ') }}</td>
-                                <td class="p-2 text-right {{ abs($differenceGlobale) > 0.01 ? 'text-red-400' : 'text-green-400' }}">
-                                    {{ number_format($differenceGlobale, 2, ',', ' ') }}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-                
-                <div class="bg-gray-100 p-3 text-xs text-gray-600">
-                    <p><strong>Légende :</strong></p>
-                    <p>T = Trouvé (Stock Initial) | R = Reçu | Ret = Retour | Rest = Restant (Stock Final)</p>
-                    <p>Qté V. (Flux) = quantite_vendue du flux | Val. (Flux) = valeur_vente du flux</p>
-                    <p>M1 = Méthode 1 (Qté calculée × Prix) | M2 = Méthode 2 (Flux financier)</p>
-                    <p class="mt-1 text-red-600">⚠️ = Différence détectée entre M1 et M2</p>
-                </div>
+            <div class="bg-white rounded-xl shadow p-5 border-l-4 border-gray-400">
+                <p class="text-xs text-gray-500">{{ $isFrench ? 'Stock Final' : 'Final Stock' }}</p>
+                <p class="text-xl font-bold text-gray-600 mt-1">{{ number_format($gF, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-gray-400">{{ $gFq }} {{ $isFrench ? 'unités' : 'units' }}</p>
             </div>
-            @else
-            <div class="bg-yellow-100 border border-yellow-300 rounded p-4 text-center">
-                <p class="text-yellow-800">Aucun produit avec activité trouvé</p>
-            </div>
-            @endif
-        </div>
-        
-        <!-- ========================================== -->
-        <!-- STATISTIQUES GLOBALES (Version originale) -->
-        <!-- ========================================== -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Total Réceptions' : 'Total Receptions' }}</p>
-                        <p class="text-3xl font-bold text-blue-600">{{ number_format($valeurReceptions, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ number_format($totalReceptionsQte, 0, ',', ' ') }} unités</p>
-                    </div>
-                    <i class="fas fa-truck text-4xl text-blue-200"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Total Retours' : 'Total Returns' }}</p>
-                        <p class="text-3xl font-bold text-orange-600">{{ number_format($valeurRetours, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ number_format($totalRetoursQte, 0, ',', ' ') }} unités</p>
-                    </div>
-                    <i class="fas fa-undo text-4xl text-orange-200"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Valeur Arrivée' : 'Incoming Value' }}</p>
-                        <p class="text-2xl font-bold text-purple-600">{{ number_format($valeurArrivee, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ number_format($totalStockInitialQte, 0, ',', ' ') }} unités</p>
-                    </div>
-                    <i class="fas fa-arrow-down text-4xl text-purple-200"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-gray-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Valeur Sortie' : 'Outgoing Value' }}</p>
-                        <p class="text-2xl font-bold text-gray-600">{{ number_format($valeurSortie, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ number_format($totalStockFinalQte, 0, ',', ' ') }} unités</p>
-                    </div>
-                    <i class="fas fa-arrow-up text-4xl text-gray-200"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Total Vendu (M2)' : 'Total Sold (M2)' }}</p>
-                        <p class="text-2xl font-bold text-green-600">{{ number_format($totalVenduMethode2, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ number_format($totalStockInitialQte + $totalReceptionsQte - $totalRetoursQte - $totalStockFinalQte, 0, ',', ' ') }} unités</p>
-                    </div>
-                    <i class="fas fa-money-bill-wave text-4xl text-green-200"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-amber-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">{{ $isFrench ? 'Attendu (Officiel)' : 'Expected (Official)' }}</p>
-                        <p class="text-2xl font-bold text-amber-600">{{ number_format($totalResumeOfficial, 0, ',', ' ') }} FCFA</p>
-                        <p class="text-xs text-gray-500 mt-1">{{ $isFrench ? 'Du résumé' : 'From summary' }}</p>
-                    </div>
-                    <i class="fas fa-calculator text-4xl text-amber-200"></i>
-                </div>
+            <div class="bg-white rounded-xl shadow p-5 border-l-4 border-green-500 sm:col-span-2">
+                <p class="text-xs text-gray-500">{{ $isFrench ? 'Total Vendu' : 'Total Sold' }}</p>
+                <p class="text-2xl font-bold text-green-600 mt-1">{{ number_format($gV, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-gray-400">{{ $gVq }} {{ $isFrench ? 'unités' : 'units' }}</p>
             </div>
         </div>
 
-        <!-- Explication de la formule -->
-        <div class="bg-blue-50 rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
-                <i class="fas fa-info-circle mr-2 text-blue-600"></i>
-                {{ $isFrench ? 'Formule de Calcul' : 'Calculation Formula' }}
-            </h3>
-            <div class="bg-white rounded-lg p-4">
-                <p class="text-sm text-gray-700 mb-2">
-                    <strong>{{ $isFrench ? 'Total Vendu' : 'Total Sold' }} = Valeur Arrivée + {{ $isFrench ? 'Réceptions' : 'Receptions' }} - {{ $isFrench ? 'Retours' : 'Returns' }} - Valeur Sortie</strong>
-                </p>
-                <p class="text-sm text-gray-600">
-                    = {{ number_format($valeurArrivee, 0, ',', ' ') }} + {{ number_format($valeurReceptions, 0, ',', ' ') }} - {{ number_format($valeurRetours, 0, ',', ' ') }} - {{ number_format($valeurSortie, 0, ',', ' ') }} = <strong class="text-green-600">{{ number_format($totalVenduMethode2, 0, ',', ' ') }} FCFA</strong>
-                </p>
-            </div>
-        </div>
-        
-        <!-- Reste du code original (Formulaire de Calcul du Manquant, etc.) -->
-        <!-- ... (garder le code existant) ... -->
-        
-    </div>
-</div>
-    </div>
-</div>
-
-{{-- ============================================================ --}}
-{{-- MODAL CALCULER MANQUANT                                      --}}
-{{-- ============================================================ --}}
-
-{{-- Données vendeurs encodées pour JS --}}
-@php
-    $vendeursData = [];
-    foreach($flux['flux'] ?? [] as $fluxVendeur) {
-        $vendeursData[] = [
-            'id'   => $fluxVendeur['vendeur']['id'] ?? '',
-            'nom'  => $fluxVendeur['vendeur']['nom'] ?? '',
-            'total'=> $fluxVendeur['total_ventes'] ?? 0,
-        ];
-    }
-@endphp
-
-<div id="modalManquant" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <!-- Backdrop -->
-    <div class="modal-backdrop" onclick="closeModalManquant()"></div>
-
-    <!-- Contenu -->
-    <div class="modal-content" style="z-index:1; margin: 1.5rem auto; align-self: flex-start;">
-
-        <!-- Header modal -->
-        <div class="modal-header">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-search-dollar text-white text-lg"></i>
-                </div>
-                <div>
-                    <h2 id="modalTitle" class="text-lg font-bold text-white">
-                        {{ $isFrench ? 'Calculer le Manquant' : 'Calculate Missing Amount' }}
-                    </h2>
-                    <p class="text-amber-100 text-xs">{{ $isFrench ? 'Vérification de caisse par vendeur' : 'Cash verification by seller' }}</p>
-                </div>
-            </div>
-            <button onclick="closeModalManquant()" class="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-all">
-                <i class="fas fa-times text-white"></i>
-            </button>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-gray-700">
+            <strong>{{ $isFrench ? 'Formule' : 'Formula' }} :</strong>
+            Stock Initial + Réceptions − Retours − Stock Final =
+            {{ number_format($gI,0,',',' ') }} + {{ number_format($gR,0,',',' ') }}
+            − {{ number_format($gRe,0,',',' ') }} − {{ number_format($gF,0,',',' ') }}
+            = <strong class="text-green-700">{{ number_format($gV, 0, ',', ' ') }} FCFA</strong>
         </div>
 
-        <!-- Body -->
-        <div class="p-6 space-y-5">
-
-            <!-- Sélection du vendeur -->
-            <div>
-                <label class="form-label">
-                    <i class="fas fa-user mr-1 text-amber-600"></i>
-                    {{ $isFrench ? 'Vendeur *' : 'Seller *' }}
-                </label>
-                <select id="modalVendeurSelect" onchange="onVendeurChange()"
-                        class="form-input">
-                    <option value="">— {{ $isFrench ? 'Choisir un vendeur' : 'Choose a seller' }} —</option>
-                    @foreach($flux['flux'] ?? [] as $fluxVendeur)
-                    <option value="{{ $fluxVendeur['vendeur']['id'] ?? '' }}"
-                            data-total="{{ $fluxVendeur['total_ventes'] ?? 0 }}">
-                        {{ $fluxVendeur['vendeur']['nom'] }}
-                        ({{ number_format($fluxVendeur['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA)
-                    </option>
+        @if(!empty($flux['flux']))
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="bg-gray-800 text-white px-4 py-3 text-sm font-bold">
+                {{ $isFrench ? 'Détail par vendeur' : 'Detail by seller' }}
+            </div>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-gray-600">{{ $isFrench ? 'Vendeur' : 'Seller' }}</th>
+                        <th class="px-4 py-2 text-center text-gray-600">{{ $isFrench ? 'Produits' : 'Products' }}</th>
+                        <th class="px-4 py-2 text-right text-gray-600">{{ $isFrench ? 'Total' : 'Total' }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach($flux['flux'] as $fv)
+                    <tr class="hover:bg-amber-50">
+                        <td class="px-4 py-2 font-medium text-gray-800">{{ $fv['vendeur']['nom'] }}</td>
+                        <td class="px-4 py-2 text-center text-gray-600">{{ count($fv['produits'] ?? []) }}</td>
+                        <td class="px-4 py-2 text-right font-bold text-amber-600">{{ number_format($fv['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                    </tr>
                     @endforeach
-                </select>
-            </div>
-
-            <!-- Tabs Simple / Détaillé -->
-            <div class="flex gap-2 bg-gray-100 rounded-xl p-1">
-                <button id="tabSimpleBtn" onclick="switchTab('simple')" class="tab-btn active">
-                    <i class="fas fa-bolt mr-1"></i>
-                    {{ $isFrench ? 'Simple' : 'Simple' }}
-                </button>
-                <button id="tabDetailBtn" onclick="switchTab('detail')" class="tab-btn inactive">
-                    <i class="fas fa-list-ul mr-1"></i>
-                    {{ $isFrench ? 'Détaillé' : 'Detailed' }}
-                </button>
-            </div>
-
-            <!-- ======================== -->
-            <!-- FORMULAIRE SIMPLE       -->
-            <!-- ======================== -->
-            <div id="tabSimple">
-                <div class="space-y-4">
-                    <!-- Valeur attendue (auto) -->
-                    <div>
-                        <label class="form-label">
-                            <i class="fas fa-tag mr-1 text-amber-600"></i>
-                            {{ $isFrench ? 'Valeur attendue (Total des ventes)' : 'Expected value (Total sales)' }}
-                        </label>
-                        <input type="number" id="simpleAttendu" readonly placeholder="0"
-                               class="form-input">
-                        <p class="text-xs text-amber-700 mt-1">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            {{ $isFrench ? 'Rempli automatiquement selon le vendeur choisi' : 'Auto-filled based on selected seller' }}
-                        </p>
-                    </div>
-
-                    <!-- Valeur perçue -->
-                    <div>
-                        <label class="form-label">
-                            <i class="fas fa-hand-holding-usd mr-1 text-green-600"></i>
-                            {{ $isFrench ? 'Valeur perçue (Montant reçu)' : 'Received amount' }}
-                        </label>
-                        <input type="number" id="simplePercu" placeholder="0" min="0"
-                               oninput="calcSimple()"
-                               class="form-input">
-                    </div>
-                </div>
-            </div>
-
-            <!-- ======================== -->
-            <!-- FORMULAIRE DÉTAILLÉ     -->
-            <!-- ======================== -->
-            <div id="tabDetail" class="hidden">
-                <div class="space-y-3">
-                    <!-- Valeur attendue (auto) -->
-                    <div>
-                        <label class="form-label">
-                            <i class="fas fa-tag mr-1 text-amber-600"></i>
-                            {{ $isFrench ? 'Valeur attendue (Total des ventes)' : 'Expected value (Total sales)' }}
-                        </label>
-                        <input type="number" id="detailAttendu" readonly placeholder="0"
-                               class="form-input">
-                    </div>
-
-                    <div class="section-divider">
-                        <span></span>
-                        <span>{{ $isFrench ? 'Fond de caisse' : 'Cash drawer' }}</span>
-                        <span></span>
-                    </div>
-
-                    <!-- Fond de caisse -->
-                    <div>
-                        <label class="form-label">
-                            <i class="fas fa-cash-register mr-1 text-blue-600"></i>
-                            {{ $isFrench ? 'Montant remis en cash (espèces)' : 'Cash amount handed over' }}
-                        </label>
-                        <input type="number" id="detailCash" placeholder="0" min="0"
-                               oninput="calcDetail()"
-                               class="form-input">
-                    </div>
-
-                    <div class="section-divider">
-                        <span></span>
-                        <span>Mobile Money</span>
-                        <span></span>
-                    </div>
-
-                    <!-- MTN MoMo -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="form-label">
-                                <i class="fas fa-mobile-alt mr-1 text-yellow-500"></i>
-                                MoMo {{ $isFrench ? 'Initial' : 'Initial' }}
-                            </label>
-                            <input type="number" id="detailMomoInit" placeholder="0" min="0"
-                                   oninput="calcDetail()"
-                                   class="form-input">
-                        </div>
-                        <div>
-                            <label class="form-label">
-                                <i class="fas fa-mobile-alt mr-1 text-yellow-600"></i>
-                                MoMo {{ $isFrench ? 'Final' : 'Final' }}
-                            </label>
-                            <input type="number" id="detailMomoFinal" placeholder="0" min="0"
-                                   oninput="calcDetail()"
-                                   class="form-input">
-                        </div>
-                    </div>
-
-                    <div class="section-divider">
-                        <span></span>
-                        <span>Orange Money</span>
-                        <span></span>
-                    </div>
-
-                    <!-- OM -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="form-label">
-                                <i class="fas fa-mobile-alt mr-1 text-orange-500"></i>
-                                OM {{ $isFrench ? 'Initial' : 'Initial' }}
-                            </label>
-                            <input type="number" id="detailOmInit" placeholder="0" min="0"
-                                   oninput="calcDetail()"
-                                   class="form-input">
-                        </div>
-                        <div>
-                            <label class="form-label">
-                                <i class="fas fa-mobile-alt mr-1 text-orange-600"></i>
-                                OM {{ $isFrench ? 'Final' : 'Final' }}
-                            </label>
-                            <input type="number" id="detailOmFinal" placeholder="0" min="0"
-                                   oninput="calcDetail()"
-                                   class="form-input">
-                        </div>
-                    </div>
-
-                    <!-- Formule rappel -->
-                    <div class="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500 border border-gray-200">
-                        <i class="fas fa-function mr-1 text-gray-400"></i>
-                        {{ $isFrench ? 'Formule' : 'Formula' }} :
-                        <span class="font-mono text-gray-700">
-                            (Cash + (MoMo Final − MoMo Init) + (OM Final − OM Init)) − Attendu
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ======================== -->
-            <!-- RÉSULTAT                -->
-            <!-- ======================== -->
-            <div id="modalResult" class="hidden">
-                <div id="modalResultBox" class="result-box">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-semibold text-gray-600">
-                            {{ $isFrench ? 'Attendu' : 'Expected' }}
-                        </span>
-                        <span id="resAttendu" class="font-bold text-gray-800 text-sm"></span>
-                    </div>
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-sm font-semibold text-gray-600">
-                            {{ $isFrench ? 'Perçu / Versé' : 'Received / Paid' }}
-                        </span>
-                        <span id="resPercu" class="font-bold text-gray-800 text-sm"></span>
-                    </div>
-                    <div class="border-t pt-3 flex items-center justify-between">
-                        <span id="resLabel" class="text-base font-bold"></span>
-                        <span id="resValeur" class="text-2xl font-bold"></span>
-                    </div>
-                </div>
-            </div>
-
+                </tbody>
+            </table>
         </div>
+        @endif
+    </div>
 
-        <!-- Footer modal -->
-        <div class="px-6 pb-6 flex justify-end gap-3">
-            <button onclick="resetModal()"
-                    class="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-all">
-                <i class="fas fa-redo mr-2"></i>{{ $isFrench ? 'Réinitialiser' : 'Reset' }}
-            </button>
-            <button onclick="closeModalManquant()"
-                    class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-all">
-                <i class="fas fa-times mr-2"></i>{{ $isFrench ? 'Fermer' : 'Close' }}
-            </button>
+    {{-- ═══════════════════════════════════════════════════════ --}}
+    {{-- VUE CALCULATEUR MANQUANT                              --}}
+    {{-- ═══════════════════════════════════════════════════════ --}}
+    <div id="view-manquant" style="display:none;">
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden max-w-xl mx-auto">
+
+            {{-- Titre --}}
+            <div style="background: linear-gradient(135deg, #b45309, #d97706); padding: 1.25rem 1.5rem;">
+                <h2 style="color:#fff; font-size:1.1rem; font-weight:700; margin:0;">
+                    <i class="fas fa-search-dollar mr-2"></i>
+                    {{ $isFrench ? 'Calculer le Manquant' : 'Calculate Missing Amount' }}
+                </h2>
+                <p style="color:#fde68a; font-size:.75rem; margin:.25rem 0 0;">
+                    {{ $isFrench ? 'Vérification de caisse par vendeur' : 'Cash verification by seller' }}
+                </p>
+            </div>
+
+            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+
+                {{-- Vendeur --}}
+                <div>
+                    <label style="display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:.35rem;">
+                        <i class="fas fa-user mr-1" style="color:#d97706;"></i>
+                        {{ $isFrench ? 'Vendeur' : 'Seller' }}
+                    </label>
+                    <select id="mVendeur" onchange="mVendeurChange()"
+                            style="width:100%; padding:.55rem .85rem; border:2px solid #e5e7eb; border-radius:.5rem; font-size:.9rem; background:#fff;">
+                        <option value="">— {{ $isFrench ? 'Choisir un vendeur' : 'Choose a seller' }} —</option>
+                        @foreach($flux['flux'] ?? [] as $fv)
+                        <option value="{{ $fv['vendeur']['id'] ?? '' }}" data-total="{{ $fv['total_ventes'] ?? 0 }}">
+                            {{ $fv['vendeur']['nom'] }} — {{ number_format($fv['total_ventes'] ?? 0, 0, ',', ' ') }} FCFA
+                        </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Total ventes attendu (readonly) --}}
+                <div>
+                    <label style="display:block; font-size:.8rem; font-weight:600; color:#374151; margin-bottom:.35rem;">
+                        <i class="fas fa-tag mr-1" style="color:#d97706;"></i>
+                        {{ $isFrench ? 'Total ventes attendu' : 'Expected total sales' }}
+                    </label>
+                    <input type="number" id="mAttendu" readonly placeholder="0"
+                           style="width:100%; padding:.55rem .85rem; border:2px solid #e5e7eb; border-radius:.5rem; font-size:.9rem; background:#fef3c7; color:#92400e; font-weight:700; box-sizing:border-box;">
+                </div>
+
+                <hr style="border:none; border-top:1px solid #e5e7eb;">
+
+                {{-- Versements --}}
+                <p style="font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:0;">
+                    <i class="fas fa-money-bill-wave mr-1" style="color:#d97706;"></i>
+                    {{ $isFrench ? 'Versements' : 'Payments' }}
+                </p>
+
+                <div class="form-row">
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            {{ $isFrench ? 'Versement 1' : 'Payment 1' }}
+                        </label>
+                        <input type="number" id="mV1" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #e5e7eb; border-radius:.5rem; font-size:.9rem; background:#fff; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            {{ $isFrench ? 'Versement 2' : 'Payment 2' }}
+                        </label>
+                        <input type="number" id="mV2" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #e5e7eb; border-radius:.5rem; font-size:.9rem; background:#fff; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            {{ $isFrench ? 'Versement 3' : 'Payment 3' }}
+                        </label>
+                        <input type="number" id="mV3" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #e5e7eb; border-radius:.5rem; font-size:.9rem; background:#fff; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            {{ $isFrench ? 'Versement Extra' : 'Extra Payment' }}
+                        </label>
+                        <input type="number" id="mVExtra" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #86efac; border-radius:.5rem; font-size:.9rem; background:#f0fdf4; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <hr style="border:none; border-top:1px solid #e5e7eb;">
+
+                {{-- Mobile Money --}}
+                <p style="font-size:.75rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:0;">
+                    <i class="fas fa-mobile-alt mr-1" style="color:#d97706;"></i>
+                    Mobile Money
+                </p>
+
+                <div class="form-row">
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            OM {{ $isFrench ? 'Final' : 'Final' }} (Orange)
+                        </label>
+                        <input type="number" id="mOmF" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #fdba74; border-radius:.5rem; font-size:.9rem; background:#fff7ed; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.2rem;">
+                            MoMo {{ $isFrench ? 'Final' : 'Final' }} (MTN)
+                        </label>
+                        <input type="number" id="mMomoF" placeholder="0" min="0" oninput="mCalculer()"
+                               style="width:100%; padding:.5rem .75rem; border:2px solid #fcd34d; border-radius:.5rem; font-size:.9rem; background:#fffbeb; box-sizing:border-box;">
+                    </div>
+                </div>
+
+                {{-- Formule rappel --}}
+                <p style="font-size:.72rem; color:#9ca3af; background:#f9fafb; border:1px solid #e5e7eb; border-radius:.5rem; padding:.6rem .85rem; margin:0;">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    {{ $isFrench ? 'Formule' : 'Formula' }} :
+                    Total Vendu − (V1 + V2 + V3 + V.Extra + OM Final + MoMo Final)
+                </p>
+
+                {{-- RÉSULTAT --}}
+                <div id="mResultat" style="display:none;">
+                    <div id="mResultatBox" style="border-radius:.75rem; padding:1rem 1.25rem;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:.4rem;">
+                            <span style="font-size:.875rem; color:#4b5563; font-weight:600;">{{ $isFrench ? 'Attendu' : 'Expected' }}</span>
+                            <span id="mResAttendu" style="font-weight:700; color:#1f2937;"></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:.4rem;">
+                            <span style="font-size:.875rem; color:#4b5563; font-weight:600;">{{ $isFrench ? 'Total versé' : 'Total paid' }}</span>
+                            <span id="mResPercu" style="font-weight:700; color:#1f2937;"></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:.75rem; font-size:.75rem; color:#9ca3af;">
+                            <span>V1 + V2 + V3 + Extra + OM + MoMo</span>
+                            <span id="mResDetail" style="font-style:italic;"></span>
+                        </div>
+                        <div style="border-top:1px solid #e5e7eb; padding-top:.75rem; display:flex; justify-content:space-between; align-items:center;">
+                            <span id="mResLabel" style="font-size:1rem; font-weight:700;"></span>
+                            <span id="mResValeur" style="font-size:1.5rem; font-weight:700;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Bouton reset --}}
+                <button onclick="mReset()"
+                        style="padding:.5rem 1.25rem; background:#f3f4f6; border:none; border-radius:.5rem; font-size:.875rem; font-weight:600; color:#374151; cursor:pointer; align-self:flex-end;"
+                        onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+                    <i class="fas fa-redo mr-1"></i>{{ $isFrench ? 'Réinitialiser' : 'Reset' }}
+                </button>
+
+            </div>
         </div>
     </div>
-</div>
 
-{{-- ============================================================ --}}
-{{-- FIN MODAL                                                    --}}
-{{-- ============================================================ --}}
+</div>
+</div>
 
 <script>
-let currentView = 'card';
-const totalVendu = {{ $totalVendu ?? 0 }};
-let activeTab = 'simple';
+(function(){
 
-// ============================================================
-// VUES PRINCIPALES
-// ============================================================
-function showCardView() {
-    document.getElementById('cardView').classList.remove('hidden');
-    document.getElementById('tableView').classList.add('hidden');
-    document.getElementById('summaryView').classList.add('hidden');
-    currentView = 'card';
-}
+    function el(id){ return document.getElementById(id); }
+    function n(id){ return parseFloat(el(id).value) || 0; }
+    function fmt(v){ return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0'); }
 
-function showTableView() {
-    document.getElementById('cardView').classList.add('hidden');
-    document.getElementById('tableView').classList.remove('hidden');
-    document.getElementById('summaryView').classList.add('hidden');
-    currentView = 'table';
-}
+    /* Vendeur sélectionné → remplir le montant attendu */
+    window.mVendeurChange = function(){
+        var sel = el('mVendeur');
+        var opt = sel.options[sel.selectedIndex];
+        var tot = (opt && opt.dataset.total) ? parseFloat(opt.dataset.total) : 0;
+        el('mAttendu').value = tot > 0 ? tot : '';
+        el('mResultat').style.display = 'none';
+        window.mCalculer();
+    };
 
-function showSummaryView() {
-    document.getElementById('cardView').classList.add('hidden');
-    document.getElementById('tableView').classList.add('hidden');
-    document.getElementById('summaryView').classList.remove('hidden');
-    currentView = 'summary';
-}
+    /* Calcul principal : manquant = attendu − (v1+v2+v3+vextra+omfinal+momofinal) */
+    window.mCalculer = function(){
+        var attendu = parseFloat(el('mAttendu').value) || 0;
 
-function showSimpleForm() {
-    document.getElementById('simpleForm').classList.remove('hidden');
-    document.getElementById('detailedForm').classList.add('hidden');
-    document.getElementById('btnSimple').classList.remove('bg-gray-300', 'text-gray-700');
-    document.getElementById('btnSimple').classList.add('bg-amber-600', 'text-white');
-    document.getElementById('btnDetailed').classList.remove('bg-amber-600', 'text-white');
-    document.getElementById('btnDetailed').classList.add('bg-gray-300', 'text-gray-700');
-}
+        var v1     = n('mV1');
+        var v2     = n('mV2');
+        var v3     = n('mV3');
+        var vExtra = n('mVExtra');
+        var omF    = n('mOmF');
+        var momoF  = n('mMomoF');
 
-function showDetailedForm() {
-    document.getElementById('simpleForm').classList.add('hidden');
-    document.getElementById('detailedForm').classList.remove('hidden');
-    document.getElementById('btnDetailed').classList.remove('bg-gray-300', 'text-gray-700');
-    document.getElementById('btnDetailed').classList.add('bg-amber-600', 'text-white');
-    document.getElementById('btnSimple').classList.remove('bg-amber-600', 'text-white');
-    document.getElementById('btnSimple').classList.add('bg-gray-300', 'text-gray-700');
-}
+        var totalVerse = v1 + v2 + v3 + vExtra + omF + momoF;
 
-function calculateSimple() {
-    const montantVerse = parseFloat(document.getElementById('montantTotalSimple').value) || 0;
-    const manquant = totalVendu - montantVerse;
-    
-    displayResult(totalVendu, montantVerse, manquant);
-    document.getElementById('detailsBreakdown').classList.add('hidden');
-}
+        if(attendu === 0 && totalVerse === 0){
+            el('mResultat').style.display = 'none';
+            return;
+        }
 
-function calculateDetailed() {
-    const fondInitial = parseFloat(document.getElementById('fondInitial').value) || 0;
-    const mtnInitial = parseFloat(document.getElementById('mtnInitial').value) || 0;
-    const orangeInitial = parseFloat(document.getElementById('orangeInitial').value) || 0;
-    
-    const fondFinal = parseFloat(document.getElementById('fondFinal').value) || 0;
-    const mtnFinal = parseFloat(document.getElementById('mtnFinal').value) || 0;
-    const orangeFinal = parseFloat(document.getElementById('orangeFinal').value) || 0;
-    
-    const cashVerse = fondFinal - fondInitial;
-    const mtnVerse = mtnFinal - mtnInitial;
-    const orangeVerse = orangeFinal - orangeInitial;
-    const montantVerse = cashVerse + mtnVerse + orangeVerse;
-    
-    const manquant = totalVendu - montantVerse;
-    
-    document.getElementById('cashDetail').textContent = formatNumber(cashVerse) + ' FCFA';
-    document.getElementById('mtnDetail').textContent = formatNumber(mtnVerse) + ' FCFA';
-    document.getElementById('orangeDetail').textContent = formatNumber(orangeVerse) + ' FCFA';
-    
-    displayResult(totalVendu, montantVerse, manquant);
-    document.getElementById('detailsBreakdown').classList.remove('hidden');
-}
+        var manquant = attendu - totalVerse;
+        var box   = el('mResultatBox');
+        var label = el('mResLabel');
+        var val   = el('mResValeur');
 
-function displayResult(attendu, verse, manquant) {
-    document.getElementById('attendu').textContent = formatNumber(attendu);
-    document.getElementById('verse').textContent = formatNumber(verse);
-    
-    const manquantElement = document.getElementById('manquantText');
-    manquantElement.textContent = formatNumber(Math.abs(manquant)) + ' FCFA';
-    
-    if (manquant > 0) {
-        manquantElement.className = 'text-3xl font-bold text-red-600';
-        manquantElement.textContent = '- ' + formatNumber(manquant) + ' FCFA ({{ $isFrench ? "Manquant" : "Missing" }})';
-    } else if (manquant < 0) {
-        manquantElement.className = 'text-3xl font-bold text-green-600';
-        manquantElement.textContent = '+ ' + formatNumber(Math.abs(manquant)) + ' FCFA ({{ $isFrench ? "Excédent" : "Surplus" }})';
-    } else {
-        manquantElement.className = 'text-3xl font-bold text-green-600';
-        manquantElement.textContent = '0 FCFA ({{ $isFrench ? "Juste" : "Exact" }})';
-    }
-    
-    document.getElementById('resultDiv').classList.remove('hidden');
-}
+        el('mResAttendu').textContent = fmt(attendu)     + ' FCFA';
+        el('mResPercu').textContent   = fmt(totalVerse)  + ' FCFA';
+        el('mResDetail').textContent  =
+            fmt(v1) + ' + ' + fmt(v2) + ' + ' + fmt(v3) +
+            ' + ' + fmt(vExtra) + ' + ' + fmt(omF) + ' + ' + fmt(momoF);
 
-function formatNumber(num) {
-    return num.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-}
+        if(manquant > 0.5){
+            box.style.background = '#fef2f2';
+            box.style.border     = '2px solid #fca5a5';
+            label.textContent    = '{{ $isFrench ? "⚠️ Manquant" : "⚠️ Missing" }}';
+            label.style.color    = '#dc2626';
+            val.textContent      = '− ' + fmt(manquant) + ' FCFA';
+            val.style.color      = '#dc2626';
+        } else if(manquant < -0.5){
+            box.style.background = '#f0fdf4';
+            box.style.border     = '2px solid #86efac';
+            label.textContent    = '{{ $isFrench ? "✅ Excédent" : "✅ Surplus" }}';
+            label.style.color    = '#16a34a';
+            val.textContent      = '+ ' + fmt(Math.abs(manquant)) + ' FCFA';
+            val.style.color      = '#16a34a';
+        } else {
+            box.style.background = '#f0fdf4';
+            box.style.border     = '2px solid #86efac';
+            label.textContent    = '{{ $isFrench ? "✅ Caisse juste" : "✅ Exact" }}';
+            label.style.color    = '#16a34a';
+            val.textContent      = '0 FCFA';
+            val.style.color      = '#16a34a';
+        }
 
-function setToday() {
-    document.querySelector('input[name="date"]').value = new Date().toISOString().split('T')[0];
-}
+        el('mResultat').style.display = 'block';
+    };
 
-function setYesterday() {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    document.querySelector('input[name="date"]').value = yesterday.toISOString().split('T')[0];
-}
+    /* Reset complet */
+    window.mReset = function(){
+        ['mVendeur', 'mAttendu', 'mV1', 'mV2', 'mV3', 'mVExtra', 'mOmF', 'mMomoF']
+            .forEach(function(id){ var e = el(id); if(e) e.value = ''; });
+        el('mResultat').style.display = 'none';
+    };
 
-// ============================================================
-// MODAL MANQUANT
-// ============================================================
-
-function openModalManquant() {
-    document.getElementById('modalManquant').classList.add('open');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeModalManquant() {
-    document.getElementById('modalManquant').classList.remove('open');
-    document.body.style.overflow = '';
-}
-
-// Fermer avec Escape
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeModalManquant();
-});
-
-function switchTab(tab) {
-    activeTab = tab;
-    const isSimple = tab === 'simple';
-
-    document.getElementById('tabSimple').classList.toggle('hidden', !isSimple);
-    document.getElementById('tabDetail').classList.toggle('hidden', isSimple);
-
-    document.getElementById('tabSimpleBtn').className = 'tab-btn ' + (isSimple ? 'active' : 'inactive');
-    document.getElementById('tabDetailBtn').className = 'tab-btn ' + (!isSimple ? 'active' : 'inactive');
-
-    // Masquer le résultat lors du changement d'onglet
-    document.getElementById('modalResult').classList.add('hidden');
-}
-
-function onVendeurChange() {
-    const sel = document.getElementById('modalVendeurSelect');
-    const opt = sel.options[sel.selectedIndex];
-    const total = opt && opt.dataset.total ? parseFloat(opt.dataset.total) : 0;
-
-    document.getElementById('simpleAttendu').value = total || '';
-    document.getElementById('detailAttendu').value = total || '';
-
-    // Recalculer si des valeurs sont déjà saisies
-    if (activeTab === 'simple') calcSimple();
-    else calcDetail();
-}
-
-function getAttendu() {
-    const v = parseFloat(document.getElementById(
-        activeTab === 'simple' ? 'simpleAttendu' : 'detailAttendu'
-    ).value) || 0;
-    return v;
-}
-
-function calcSimple() {
-    const attendu = getAttendu();
-    const percu   = parseFloat(document.getElementById('simplePercu').value) || 0;
-    if (attendu === 0 && percu === 0) {
-        document.getElementById('modalResult').classList.add('hidden');
-        return;
-    }
-    showModalResult(attendu, percu);
-}
-
-function calcDetail() {
-    const attendu   = getAttendu();
-    const cash      = parseFloat(document.getElementById('detailCash').value)      || 0;
-    const momoInit  = parseFloat(document.getElementById('detailMomoInit').value)  || 0;
-    const momoFinal = parseFloat(document.getElementById('detailMomoFinal').value) || 0;
-    const omInit    = parseFloat(document.getElementById('detailOmInit').value)    || 0;
-    const omFinal   = parseFloat(document.getElementById('detailOmFinal').value)   || 0;
-
-    const totalPercu = cash + (momoFinal - momoInit) + (omFinal - omInit);
-
-    if (attendu === 0 && totalPercu === 0) {
-        document.getElementById('modalResult').classList.add('hidden');
-        return;
-    }
-    showModalResult(attendu, totalPercu);
-}
-
-function showModalResult(attendu, percu) {
-    const diff = percu - attendu;  // positif = excédent, négatif = manquant
-    const manquant = -diff;        // positif = manquant
-
-    const box    = document.getElementById('modalResultBox');
-    const label  = document.getElementById('resLabel');
-    const valeur = document.getElementById('resValeur');
-
-    document.getElementById('resAttendu').textContent = formatNumber(attendu) + ' FCFA';
-    document.getElementById('resPercu').textContent   = formatNumber(percu)   + ' FCFA';
-
-    // Reset classes
-    box.className = 'result-box';
-
-    if (manquant > 0.5) {
-        box.classList.add('manquant');
-        label.textContent  = '⚠️ {{ $isFrench ? "Manquant" : "Missing" }}';
-        label.className    = 'text-base font-bold text-red-600';
-        valeur.textContent = '− ' + formatNumber(manquant) + ' FCFA';
-        valeur.className   = 'text-2xl font-bold text-red-600';
-    } else if (manquant < -0.5) {
-        box.classList.add('excedent');
-        label.textContent  = '✅ {{ $isFrench ? "Excédent" : "Surplus" }}';
-        label.className    = 'text-base font-bold text-green-600';
-        valeur.textContent = '+ ' + formatNumber(Math.abs(manquant)) + ' FCFA';
-        valeur.className   = 'text-2xl font-bold text-green-600';
-    } else {
-        box.classList.add('exact');
-        label.textContent  = '✅ {{ $isFrench ? "Caisse juste" : "Exact" }}';
-        label.className    = 'text-base font-bold text-green-600';
-        valeur.textContent = '0 FCFA';
-        valeur.className   = 'text-2xl font-bold text-green-600';
-    }
-
-    document.getElementById('modalResult').classList.remove('hidden');
-}
-
-function resetModal() {
-    document.getElementById('modalVendeurSelect').value = '';
-    ['simpleAttendu','simplePercu',
-     'detailAttendu','detailCash',
-     'detailMomoInit','detailMomoFinal',
-     'detailOmInit','detailOmFinal'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    document.getElementById('modalResult').classList.add('hidden');
-    switchTab('simple');
-}
+})();
 </script>
 @endsection
