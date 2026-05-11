@@ -15,10 +15,10 @@ use App\Http\Controllers\Web\VerrouillageController;
 
 
 
-Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.post');
-Route::get('/inscription', [AuthController::class, 'showInscription'])->name('inscription');
-Route::post('/inscription', [AuthController::class, 'inscription'])->name('inscription.post');
+Route::get('auth/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('auth/login', [AuthController::class, 'login'])->name('login.post');
+Route::get('auth/inscription', [AuthController::class, 'showInscription'])->name('inscription');
+Route::post('auth/inscription', [AuthController::class, 'inscription'])->name('inscription.post');
 
 Route::get('/easygest-bp', function () {
     return view('landing.easygest-bp');
@@ -29,6 +29,9 @@ Route::get('/', function () {
 });
 
 
+Route::get('/pwa/{any}', function () {
+    return file_get_contents(public_path('pwa/index.html'));
+})->where('any', '.*');
 
 Route::get('/test-error', function () {
     throw new \Exception('Ceci est une erreur de test !');
@@ -51,13 +54,6 @@ Route::middleware('auth','track_statistic')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
-    // Gestion des retours
-    Route::get('/retours', [RetourProduitController::class, 'index'])->name('retours.index');
-    Route::get('/retours/{retour}', [RetourProduitController::class, 'show'])->name('retours.show');
-    Route::get('/retours/{retour}/edit', [RetourProduitController::class, 'edit'])->name('retours.edit');
-    Route::put('/retours/{retour}', [RetourProduitController::class, 'update'])->name('retours.update');
-    Route::delete('/retours/{retour}', [RetourProduitController::class, 'destroy'])->name('retours.destroy');
-
     // Gestion du verrouillage
     Route::get('/verrouillage', [VerrouillageController::class, 'index'])->name('verrouillage.index');
     Route::post('/verrouillage/verrouiller', [VerrouillageController::class, 'verrouiller'])->name('verrouillage.verrouiller');
@@ -97,14 +93,40 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Routes PDG
     Route::middleware(['role:pdg'])->prefix('pdg')->name('pdg.')->group(function () {
         Route::get('/dashboard', [PdgController::class, 'dashboard'])->name('dashboard');
-        
-        // Réceptions - avec modification
+         
+        Route::get('manquants',            [PdgController::class, 'manquants'])->name('manquants');
+        Route::post('manquants/valider',   [PdgController::class, 'validerManquant'])->name('manquants.valider');
+        Route::delete('manquants/{id}',    [PdgController::class, 'destroyManquant'])->name('manquants.destroy');
+
+
+        Route::post('/inventaires/{id}/details', [PdgController::class, 'addInventaireDetail'])->name('inventaires.details.add');
+        Route::delete('/inventaires/{id}/details/{detailId}', [PdgController::class, 'destroyInventaireDetail'])->name('inventaires.details.destroy');
+         // Réceptions - avec modification
         Route::get('/receptions', [PdgController::class, 'receptions'])->name('receptions');
         Route::get('/receptions/{id}/edit', [PdgController::class, 'editReception'])->name('receptions.edit');
         Route::put('/receptions/{id}', [PdgController::class, 'updateReception'])->name('receptions.update');
         Route::get('/receptions/imprimer', [PdgController::class, 'imprimerReceptions'])->name('receptions.imprimer');
-        
-        // Inventaires - avec modification
+      // Dans le groupe Route::middleware(['role:pdg'])->prefix('pdg')->name('pdg.')
+        Route::delete('/receptions/{id}', [PdgController::class, 'destroyReception'])->name('receptions.destroy');
+        Route::get('/receptions/reset-filters', [PdgController::class, 'resetReceptionsFilters'])->name('receptions.reset');
+
+        Route::get('/retours', [PdgController::class, 'retours'])->name('retours');
+        Route::get('/retours/reset-filters', [PdgController::class, 'resetRetoursFilters'])->name('retours.reset');
+        Route::get('/retours/{id}/edit', [PdgController::class, 'editRetour'])->name('retours.edit');
+        Route::put('/retours/{id}', [PdgController::class, 'updateRetour'])->name('retours.update');
+        Route::delete('/retours/{id}', [PdgController::class, 'destroyRetour'])->name('retours.destroy');
+
+
+        // Raisons de retour (CRUD PDG)
+        Route::get('/raisons-retour', [PdgController::class, 'raisonsRetour'])->name('raisons-retour.index');
+        Route::get('/raisons-retour/create', [PdgController::class, 'createRaisonRetour'])->name('raisons-retour.create');
+        Route::post('/raisons-retour', [PdgController::class, 'storeRaisonRetour'])->name('raisons-retour.store');
+        Route::get('/raisons-retour/{id}/edit', [PdgController::class, 'editRaisonRetour'])->name('raisons-retour.edit');
+        Route::put('/raisons-retour/{id}', [PdgController::class, 'updateRaisonRetour'])->name('raisons-retour.update');
+        Route::post('/raisons-retour/{id}/toggle', [PdgController::class, 'toggleRaisonRetour'])->name('raisons-retour.toggle');
+        Route::delete('/raisons-retour/{id}', [PdgController::class, 'destroyRaisonRetour'])->name('raisons-retour.destroy');
+
+// Inventaires - avec modification
         Route::get('/inventaires', [PdgController::class, 'inventaires'])->name('inventaires');
         Route::get('/inventaires/{id}/edit', [PdgController::class, 'editInventaire'])->name('inventaires.edit');
         Route::put('/inventaires/{id}', [PdgController::class, 'updateInventaire'])->name('inventaires.update');

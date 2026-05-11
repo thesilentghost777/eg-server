@@ -1,0 +1,24 @@
+{
+  "name": "EasyGest BP",
+  "short_name": "EasyGest",
+  "description": "Gestion de boulangerie-pâtisserie offline-first",
+  "theme_color": "#D4A574",
+  "background_color": "#FDF8F3",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/pwa/",
+  "start_url": "/pwa/login",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,15 +1,15 @@
 {
-    "name": "Laravel PWA",
-    "short_name": "LPT",
+    "name": "EasyGest BP",
+    "short_name": "EGBP",
     "start_url": "/",
     "background_color": "#000000",
-    "description": "A Progressive Web Application setup for Laravel projects.",
+    "description": "Une application qui vous aide à vous concentrer sur l'essentiel.",
     "display": "fullscreen",
     "theme_color": "#000000",
     "icons": [
         {
             "src": "logo.png",
-            "sizes": "512x512",
+            "sizes": "1024x1024",
             "type": "image/png"
         }
     ]

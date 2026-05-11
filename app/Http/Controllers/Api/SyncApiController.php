@@ -19,7 +19,7 @@ class SyncApiController extends Controller
         try {
             $clientId = $request->header('X-Client-ID');
             $lastSync = $request->query('last_sync');
-            
+
             if (!$clientId) {
                 return response()->json([
                     'success' => false,
@@ -27,7 +27,6 @@ class SyncApiController extends Controller
                 ], 400);
             }
 
-            // Vérifier que le client existe
             $client = DB::table('clients')->where('client_id', $clientId)->first();
             if (!$client) {
                 return response()->json([
@@ -56,7 +55,7 @@ class SyncApiController extends Controller
             $data = [];
 
             // Users
-            $data['users'] = $this->getUnsyncedData('users', $clientId, $lastSyncCarbon, 
+            $data['users'] = $this->getUnsyncedData('users', $clientId, $lastSyncCarbon,
                 ['id', 'name', 'numero_telephone', 'role', 'code_pin', 'actif', 'updated_at']);
 
             // Produits
@@ -64,37 +63,19 @@ class SyncApiController extends Controller
                 ['id', 'nom', 'prix', 'categorie', 'actif', 'updated_at'],
                 ['actif' => true]);
 
-            // Vendeurs actifs
-            $data['vendeurs_actifs'] = $this->getUnsyncedData('vendeurs_actifs', $clientId, $lastSyncCarbon,
-                ['id', 'categorie', 'vendeur_id', 'connecte_a', 'updated_at']);
+            // FIX: inclure "connecte_a" ET faire une jointure pour récupérer le nom du vendeur
+            // Le mobile a besoin de vendeur_name pour afficher qui est actif.
+            $data['vendeurs_actifs'] = $this->getVendeursActifs($clientId, $lastSyncCarbon);
 
             // Réceptions
             $data['receptions_pointeur'] = $this->getUnsyncedData('receptions_pointeur', $clientId, $lastSyncCarbon,
-                ['id', 'pointeur_id', 'producteur_id', 'produit_id', 'quantite', 'vendeur_assigne_id', 
+                ['id', 'pointeur_id', 'producteur_id', 'produit_id', 'quantite', 'vendeur_assigne_id',
                  'verrou', 'date_reception', 'notes', 'updated_at']);
 
-            // Retours
+            // Retours - FIX: on sélectionne explicitement les colonnes dont le mobile a besoin
             $data['retours_produits'] = $this->getUnsyncedData('retours_produits', $clientId, $lastSyncCarbon,
-                ['id', 'pointeur_id', 'vendeur_id', 'produit_id', 'quantite', 'raison', 
+                ['id', 'pointeur_id', 'vendeur_id', 'produit_id', 'quantite', 'raison',
                  'description', 'verrou', 'date_retour', 'updated_at']);
-
-            //on n'envoie plus les inventaires et les sessions dans les pull
-            /*
-            // Inventaires
-            $data['inventaires'] = $this->getUnsyncedData('inventaires', $clientId, $lastSyncCarbon,
-                ['id', 'vendeur_sortant_id', 'vendeur_entrant_id', 'categorie', 
-                 'valide_sortant', 'valide_entrant', 'date_inventaire', 'updated_at']);
-
-            // Détails inventaire
-            if (!empty($data['inventaires']) && count($data['inventaires']) > 0) {
-                $inventaireIds = collect($data['inventaires'])->pluck('id');
-                $data['inventaire_details'] = $this->getUnsyncedData('inventaire_details', $clientId, $lastSyncCarbon,
-                    ['id', 'inventaire_id', 'produit_id', 'quantite_restante', 'updated_at'],
-                    null, $inventaireIds->toArray());
-            } else {
-                $data['inventaire_details'] = [];
-            }
-            */
 
             // Sessions
             $data['sessions_vente'] = $this->getUnsyncedData('sessions_vente', $clientId, $lastSyncCarbon,
@@ -102,11 +83,13 @@ class SyncApiController extends Controller
                  'montant_verse', 'orange_money_final', 'mtn_money_final', 'manquant', 'statut',
                  'fermee_par', 'date_ouverture', 'date_fermeture', 'updated_at']);
 
-            
-            \Log::info('PULL - Données récupérées', [
-                'client_id' => $clientId,
-                'data' => $data
-            ]);
+            // Raisons de retour (toujours toutes envoyées, table légère)
+            $data['raisons_retour'] = DB::table('raisons_retour')
+                ->where('actif', true)
+                ->select(['id', 'code', 'libelle', 'actif', 'updated_at'])
+                ->get();
+ 
+            \Log::info('PULL - Données récupérées', ['client_id' => $clientId]);
 
             return response()->json([
                 'success' => true,
@@ -127,6 +110,38 @@ class SyncApiController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * FIX: Récupérer les vendeurs actifs avec le nom du vendeur (jointure users)
+     * Le mobile stocke vendeur_name mais la table vendeurs_actifs n'a pas ce champ.
+     */
+    private function getVendeursActifs($clientId, $lastSync)
+    {
+        $query = DB::table('vendeurs_actifs')
+            ->join('users', 'vendeurs_actifs.vendeur_id', '=', 'users.id')
+            ->select(
+                'vendeurs_actifs.id',
+                'vendeurs_actifs.categorie',
+                'vendeurs_actifs.vendeur_id',
+                'users.name as vendeur_name',   // <-- nom résolu côté serveur
+                'vendeurs_actifs.connecte_a',
+                'vendeurs_actifs.updated_at'
+            );
+
+        $query->where(function ($q) use ($clientId, $lastSync) {
+            $q->where(function ($sq) use ($clientId) {
+                $sq->whereNull('vendeurs_actifs.synced_clients')
+                   ->orWhereRaw("NOT JSON_CONTAINS(vendeurs_actifs.synced_clients, '\"$clientId\"')");
+            })->orWhere(function ($sq) use ($lastSync) {
+                if ($lastSync) {
+                    $lastSyncPlusOneMin = date('Y-m-d H:i:s', strtotime($lastSync . ' +1 minutes'));
+                    $sq->where('vendeurs_actifs.updated_at', '>', $lastSyncPlusOneMin);
+                }
+            });
+        });
+
+        return $query->get();
     }
 
     /**
@@ -171,7 +186,7 @@ class SyncApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             \Log::error('Erreur ACK', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -185,7 +200,7 @@ class SyncApiController extends Controller
         }
     }
 
-     public function push(Request $request)
+    public function push(Request $request)
     {
         try {
             $clientId = $request->header('X-Client-ID');
@@ -223,10 +238,6 @@ class SyncApiController extends Controller
                                 'id' => $reception['id'] ?? null,
                                 'server_id' => $result['id'],
                             ];
-                            \Log::debug('[PUSH] Réception synchronisée', [
-                                'server_id' => $result['id'],
-                                'local_id' => $reception['local_id'] ?? null
-                            ]);
                         } else {
                             $conflicts[] = [
                                 'table' => 'receptions_pointeur',
@@ -251,10 +262,6 @@ class SyncApiController extends Controller
                                 'id' => $retour['id'] ?? null,
                                 'server_id' => $result['id'],
                             ];
-                            \Log::debug('[PUSH] Retour synchronisé', [
-                                'server_id' => $result['id'],
-                                'local_id' => $retour['local_id'] ?? null
-                            ]);
                         } else {
                             $conflicts[] = [
                                 'table' => 'retours_produits',
@@ -267,35 +274,18 @@ class SyncApiController extends Controller
                     }
                 }
 
-                // 🔥 INVENTAIRES - CORRECTION MAJEURE
+                // Inventaires
                 if (!empty($data['inventaires'])) {
                     \Log::info('[PUSH] Traitement de ' . count($data['inventaires']) . ' inventaires');
                     foreach ($data['inventaires'] as $inventaire) {
-                        \Log::debug('[PUSH] Inventaire reçu', [
-                            'local_id' => $inventaire['local_id'] ?? null,
-                            'id' => $inventaire['id'] ?? null,
-                            'vendeur_sortant_id' => $inventaire['vendeur_sortant_id'] ?? null,
-                            'vendeur_entrant_id' => $inventaire['vendeur_entrant_id'] ?? null
-                        ]);
-                        
                         $result = $this->syncInventaire($inventaire, $clientId);
-                        
                         if ($result['success']) {
-                            // 🔥 CORRECTION: Toujours retourner le local_id ET le server_id
-                            $syncedItem = [
+                            $synced[] = [
                                 'table' => 'inventaires',
                                 'local_id' => $inventaire['local_id'] ?? null,
                                 'id' => $inventaire['id'] ?? null,
                                 'server_id' => $result['id'],
                             ];
-                            
-                            $synced[] = $syncedItem;
-                            
-                            \Log::info('[PUSH] ✅ Inventaire synchronisé avec succès', [
-                                'local_id' => $inventaire['local_id'],
-                                'server_id' => $result['id'],
-                                'synced_item' => $syncedItem
-                            ]);
                         } else {
                             $conflicts[] = [
                                 'table' => 'inventaires',
@@ -303,9 +293,6 @@ class SyncApiController extends Controller
                                 'local_id' => $inventaire['local_id'] ?? null,
                                 'reason' => $result['reason'],
                             ];
-                            \Log::error('[PUSH] ❌ Échec sync inventaire', [
-                                'reason' => $result['reason']
-                            ]);
                             $hasErrors = true;
                         }
                     }
@@ -313,37 +300,21 @@ class SyncApiController extends Controller
 
                 // Inventaire Details
                 if (!empty($data['inventaire_details'])) {
-                    \Log::info('[PUSH] Traitement de ' . count($data['inventaire_details']) . ' détails d\'inventaire');
+                    \Log::info('[PUSH] Traitement de ' . count($data['inventaire_details']) . ' détails inventaire');
                     foreach ($data['inventaire_details'] as $detail) {
-                        \Log::debug('[PUSH] Détail reçu', [
-                            'inventaire_id' => $detail['inventaire_id'] ?? null,
-                            'inventaire_local_id' => $detail['inventaire_local_id'] ?? null,
-                            'produit_id' => $detail['produit_id'] ?? null,
-                            'quantite_restante' => $detail['quantite_restante'] ?? null
-                        ]);
-                        
                         $result = $this->syncInventaireDetails($detail, $clientId);
-                        
                         if ($result['success']) {
                             $synced[] = [
                                 'table' => 'inventaire_details',
                                 'id' => $detail['id'] ?? null,
                                 'server_id' => $result['id'],
                             ];
-                            \Log::info('[PUSH] ✅ Détail synchronisé', [
-                                'server_id' => $result['id'],
-                                'produit_id' => $detail['produit_id']
-                            ]);
                         } else {
                             $conflicts[] = [
                                 'table' => 'inventaire_details',
                                 'id' => $detail['id'] ?? null,
                                 'reason' => $result['reason'],
                             ];
-                            \Log::warning('[PUSH] ⚠️ Échec sync détail', [
-                                'reason' => $result['reason'],
-                                'produit_id' => $detail['produit_id'] ?? null
-                            ]);
                             $hasErrors = true;
                         }
                     }
@@ -361,10 +332,6 @@ class SyncApiController extends Controller
                                 'id' => $session['id'] ?? null,
                                 'server_id' => $result['id'],
                             ];
-                            \Log::debug('[PUSH] Session synchronisée', [
-                                'server_id' => $result['id'],
-                                'local_id' => $session['local_id'] ?? null
-                            ]);
                         } else {
                             $conflicts[] = [
                                 'table' => 'sessions_vente',
@@ -377,15 +344,8 @@ class SyncApiController extends Controller
                     }
                 }
 
-                // Si des erreurs critiques, rollback
                 if ($hasErrors && empty($synced)) {
                     DB::rollBack();
-                    
-                    \Log::warning('PUSH échoué - aucune donnée synchronisée', [
-                        'client_id' => $clientId,
-                        'conflicts' => count($conflicts)
-                    ]);
-
                     return response()->json([
                         'success' => false,
                         'confirmed' => false,
@@ -396,14 +356,12 @@ class SyncApiController extends Controller
                     ], 422);
                 }
 
-                // Commit uniquement si tout est OK
                 DB::commit();
 
                 \Log::info('PUSH confirmé', [
                     'client_id' => $clientId,
                     'synced' => count($synced),
                     'conflicts' => count($conflicts),
-                    'synced_details' => $synced
                 ]);
 
                 return response()->json([
@@ -422,7 +380,7 @@ class SyncApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             \Log::error('Erreur critique PUSH', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -439,11 +397,117 @@ class SyncApiController extends Controller
         }
     }
 
-    /**
-     * Synchroniser un inventaire
-     */
-    private function syncInventaire($data, $clientId)
+    // ========== SYNC PRIVÉES ==========
+
+    private function syncReception($data, $clientId)
 {
+    try {
+        $dateReception = $this->parseDate($data['date_reception'] ?? null);
+
+        $commonData = [
+            'pointeur_id'       => $data['pointeur_id'],
+            'producteur_id'     => $data['producteur_id'],
+            'produit_id'        => $data['produit_id'],
+            'quantite'          => $data['quantite'],
+            'vendeur_assigne_id'=> $data['vendeur_assigne_id'] ?? null,
+            'verrou'            => $data['verrou'] ?? false,
+            'date_reception'    => $dateReception,
+            'notes'             => $data['notes'] ?? null,
+        ];
+
+        if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
+            $existing = DB::table('receptions_pointeur')->find($data['id']);
+            if ($existing) {
+                if ($existing->verrou) {
+                    return ['success' => false, 'reason' => 'Enregistrement verrouillé'];
+                }
+                $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
+                if (!in_array($clientId, $syncedClients)) {
+                    $syncedClients[] = $clientId;
+                }
+                $commonData['synced_clients'] = json_encode($syncedClients);
+                $commonData['updated_at'] = now();
+                // NE PAS écraser date_reception sur update
+                unset($commonData['date_reception']);
+                DB::table('receptions_pointeur')->where('id', $data['id'])->update($commonData);
+                return ['success' => true, 'id' => $data['id']];
+            }
+        }
+
+        $commonData['synced_clients'] = json_encode([$clientId]);
+        $commonData['created_at'] = now();
+        $commonData['updated_at'] = now();
+        $id = DB::table('receptions_pointeur')->insertGetId($commonData);
+        return ['success' => true, 'id' => $id];
+
+    } catch (\Exception $e) {
+        \Log::error('syncReception error', ['error' => $e->getMessage()]);
+        return ['success' => false, 'reason' => $e->getMessage()];
+    }
+}
+
+    private function syncRetour($data, $clientId)
+{
+    try {
+        \Log::info('[SYNC RETOUR] Début', ['client_id' => $clientId, 'payload' => $data]);
+
+        $dateRetour = $this->parseDate($data['date_retour'] ?? null);
+
+        $vendeurId = $data['vendeur_id'] ?? null;
+        if ($vendeurId === null) {
+            \Log::error('[SYNC RETOUR] vendeur_id manquant ou null', ['data' => $data]);
+            return ['success' => false, 'reason' => 'vendeur_id obligatoire pour un retour'];
+        }
+
+        $commonData = [
+            'pointeur_id' => $data['pointeur_id'] ?? null,
+            'vendeur_id'  => $vendeurId,
+            'produit_id'  => $data['produit_id'] ?? null,
+            'quantite'    => $data['quantite'] ?? null,
+            'raison'      => $data['raison'] ?? null,
+            'description' => $data['description'] ?? null,
+            'verrou'      => $data['verrou'] ?? false,
+            'date_retour' => $dateRetour,
+        ];
+
+        if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
+            $existing = DB::table('retours_produits')->find($data['id']);
+            if ($existing) {
+                if ($existing->verrou) {
+                    return ['success' => false, 'reason' => 'Verrouillé'];
+                }
+                $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
+                if (!in_array($clientId, $syncedClients)) {
+                    $syncedClients[] = $clientId;
+                }
+                $commonData['synced_clients'] = json_encode($syncedClients);
+                $commonData['updated_at'] = now();
+                // NE PAS écraser date_retour sur update
+                unset($commonData['date_retour']);
+                DB::table('retours_produits')->where('id', $data['id'])->update($commonData);
+                \Log::info('[SYNC RETOUR] Mise à jour réussie', ['id' => $data['id']]);
+                return ['success' => true, 'id' => $data['id']];
+            }
+        }
+
+        $commonData['synced_clients'] = json_encode([$clientId]);
+        $commonData['created_at'] = now();
+        $commonData['updated_at'] = now();
+        $id = DB::table('retours_produits')->insertGetId($commonData);
+        \Log::info('[SYNC RETOUR] Création réussie', ['id' => $id]);
+        return ['success' => true, 'id' => $id];
+
+    } catch (\Exception $e) {
+        \Log::error('[SYNC RETOUR] Exception', [
+            'message' => $e->getMessage(),
+            'data' => $data,
+        ]);
+        return ['success' => false, 'reason' => $e->getMessage()];
+    }
+}
+
+   private function syncInventaire($data, $clientId)
+    {
     try {
         \Log::info('[SYNC INVENTAIRE] Début', [
             'client_id' => $clientId,
@@ -451,12 +515,8 @@ class SyncApiController extends Controller
             'id'        => $data['id'] ?? null,
         ]);
 
-        // Validation des vendeurs
         $vendeurSortant = DB::table('users')->find($data['vendeur_sortant_id'] ?? null);
         if (!$vendeurSortant) {
-            \Log::error('[SYNC INVENTAIRE] Vendeur sortant introuvable', [
-                'vendeur_sortant_id' => $data['vendeur_sortant_id'] ?? null,
-            ]);
             return ['success' => false, 'reason' => 'Vendeur sortant introuvable'];
         }
 
@@ -468,41 +528,35 @@ class SyncApiController extends Controller
             'categorie'          => $categorie,
             'valide_sortant'     => true,
             'valide_entrant'     => true,
-            'date_inventaire'    => now(),
+            'date_inventaire'    => $this->parseDate($data['date_inventaire'] ?? null),
         ];
 
-        // ── CAS 1 : l'id reçu est un vrai server_id (sync suivante après correction JS) ──
+        // Mise à jour si l'inventaire existe déjà
         if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
             $existing = DB::table('inventaires')->find($data['id']);
-
             if ($existing) {
-                \Log::info('[SYNC INVENTAIRE] Mise à jour enregistrement existant', ['id' => $data['id']]);
-
                 $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
                 if (!in_array($clientId, $syncedClients)) {
                     $syncedClients[] = $clientId;
                 }
-
                 $commonData['synced_clients'] = json_encode($syncedClients);
-                $commonData['updated_at']     = now();
-
+                $commonData['updated_at'] = now();
                 DB::table('inventaires')->where('id', $data['id'])->update($commonData);
 
-                \Log::info('[SYNC INVENTAIRE] ✅ Mise à jour réussie', ['id' => $data['id']]);
+                // ✅ Mettre à jour vendeurs_actifs
+                DB::table('vendeurs_actifs')
+                    ->where('categorie', $categorie)
+                    ->update([
+                        'vendeur_id' => $data['vendeur_entrant_id'],
+                        'connecte_a' => now(),
+                        'updated_at' => now(),
+                    ]);
+
                 return ['success' => true, 'id' => $data['id']];
             }
-
-            // Si l'id n'existe pas sur le serveur, c'est un id IndexedDB local → on tombe
-            // dans le cas 2 ci-dessous (création avec filet anti-doublon).
-            \Log::warning('[SYNC INVENTAIRE] ID non trouvé sur le serveur (probablement un id IndexedDB local)', [
-                'id_reçu' => $data['id'],
-            ]);
         }
 
-        // ── CAS 2 : filet anti-doublon ──────────────────────────────────────────────────
-        // Avant de créer, on vérifie qu'on n'a pas déjà un inventaire de ce client
-        // pour les mêmes vendeurs dans les dernières 24h. Cela empêche la création
-        // de doublons vides quand le mobile renvoie un inventaire avec son id local.
+        // Anti-doublon
         $recentDuplicate = DB::table('inventaires')
             ->where('vendeur_sortant_id', $data['vendeur_sortant_id'])
             ->where('vendeur_entrant_id', $data['vendeur_entrant_id'])
@@ -512,222 +566,198 @@ class SyncApiController extends Controller
             ->first();
 
         if ($recentDuplicate) {
-            \Log::info('[SYNC INVENTAIRE] Doublon détecté – retour de l\'inventaire existant', [
-                'id'        => $recentDuplicate->id,
-                'client_id' => $clientId,
-            ]);
+            // ✅ Mettre à jour vendeurs_actifs même en cas de doublon
+            DB::table('vendeurs_actifs')
+                ->where('categorie', $categorie)
+                ->update([
+                    'vendeur_id' => $data['vendeur_entrant_id'],
+                    'connecte_a' => now(),
+                    'updated_at' => now(),
+                ]);
+
             return ['success' => true, 'id' => $recentDuplicate->id];
         }
 
-        // ── CAS 3 : création ────────────────────────────────────────────────────────────
+        // Création
         $commonData['synced_clients'] = json_encode([$clientId]);
-        $commonData['created_at']     = now();
-        $commonData['updated_at']     = now();
-
-        \Log::info('[SYNC INVENTAIRE] Création nouvel inventaire', $commonData);
-
+        $commonData['created_at'] = now();
+        $commonData['updated_at'] = now();
         $id = DB::table('inventaires')->insertGetId($commonData);
 
-        \Log::info('[SYNC INVENTAIRE] ✅ Création réussie', [
-            'id'        => $id,
-            'client_id' => $clientId,
-            'local_id'  => $data['local_id'] ?? null,
+        // ✅ Mettre à jour vendeurs_actifs après création
+        DB::table('vendeurs_actifs')
+            ->where('categorie', $categorie)
+            ->update([
+                'vendeur_id' => $data['vendeur_entrant_id'],
+                'connecte_a' => now(),
+                'updated_at' => now(),
+            ]);
+
+        \Log::info('[SYNC INVENTAIRE] Créé + vendeur actif mis à jour', [
+            'inventaire_id' => $id,
+            'categorie'     => $categorie,
+            'vendeur_entrant_id' => $data['vendeur_entrant_id'],
         ]);
 
         return ['success' => true, 'id' => $id];
 
     } catch (\Exception $e) {
-        \Log::error('[SYNC INVENTAIRE] Exception', [
-            'message' => $e->getMessage(),
-            'trace'   => $e->getTraceAsString(),
-        ]);
+        \Log::error('[SYNC INVENTAIRE] Exception', ['message' => $e->getMessage()]);
         return ['success' => false, 'reason' => $e->getMessage()];
     }
-}
+    }
 
-    /**
-     * Synchroniser un détail d'inventaire
-     */
     private function syncInventaireDetails($data, $clientId)
     {
         try {
-            \Log::info('[SYNC INVENTAIRE DETAILS] Début', [
-                'client_id' => $clientId,
-                'payload' => $data
-            ]);
-
-            // Validation : produit_id obligatoire
             if (empty($data['produit_id'])) {
-                \Log::error('[SYNC INVENTAIRE DETAILS] produit_id manquant');
                 return ['success' => false, 'reason' => 'produit_id manquant'];
             }
 
-            // Résolution de l'inventaire_id
             $inventaire_id = null;
-            
+
             if (!empty($data['inventaire_id'])) {
                 $inventaire_id = $data['inventaire_id'];
-                \Log::debug('[SYNC INVENTAIRE DETAILS] inventaire_id fourni', [
-                    'inventaire_id' => $inventaire_id
-                ]);
             } elseif (!empty($data['inventaire_local_id'])) {
-                \Log::debug('[SYNC INVENTAIRE DETAILS] Résolution via inventaire_local_id', [
-                    'inventaire_local_id' => $data['inventaire_local_id']
-                ]);
-                
                 $inventaire = DB::table('inventaires')
                     ->whereRaw("JSON_CONTAINS(synced_clients, '\"$clientId\"')")
                     ->orderBy('updated_at', 'desc')
                     ->first();
-                
                 if ($inventaire) {
                     $inventaire_id = $inventaire->id;
-                    \Log::info('[SYNC INVENTAIRE DETAILS] ✅ Inventaire résolu', [
-                        'inventaire_local_id' => $data['inventaire_local_id'],
-                        'inventaire_id' => $inventaire_id
-                    ]);
                 } else {
-                    \Log::error('[SYNC INVENTAIRE DETAILS] Inventaire parent introuvable');
                     return ['success' => false, 'reason' => 'Inventaire parent introuvable'];
                 }
             } else {
-                \Log::error('[SYNC INVENTAIRE DETAILS] inventaire_id/inventaire_local_id manquant');
                 return ['success' => false, 'reason' => 'inventaire_id manquant'];
             }
 
-            // Vérification inventaire existe
             $inventaire = DB::table('inventaires')->find($inventaire_id);
-            
             if (!$inventaire) {
-                \Log::error('[SYNC INVENTAIRE DETAILS] Inventaire inexistant', [
-                    'inventaire_id' => $inventaire_id
-                ]);
                 return ['success' => false, 'reason' => 'Inventaire parent introuvable'];
             }
 
-            // Vérification produit existe
             $produit = DB::table('produits')->find($data['produit_id']);
-            
             if (!$produit) {
-                \Log::error('[SYNC INVENTAIRE DETAILS] Produit introuvable', [
-                    'produit_id' => $data['produit_id']
-                ]);
                 return ['success' => false, 'reason' => 'Produit introuvable'];
             }
 
-            // Données communes
             $commonData = [
-                'inventaire_id' => $inventaire_id,
-                'produit_id' => $data['produit_id'],
-                'quantite_restante' => $data['quantite_restante'] ?? 0,
+                'inventaire_id'    => $inventaire_id,
+                'produit_id'       => $data['produit_id'],
+                'quantite_restante'=> $data['quantite_restante'] ?? 0,
             ];
 
-            // Vérification doublon
             $existing = DB::table('inventaire_details')
                 ->where('inventaire_id', $inventaire_id)
                 ->where('produit_id', $data['produit_id'])
                 ->first();
 
             if ($existing) {
-                \Log::info('[SYNC INVENTAIRE DETAILS] Mise à jour existant', [
-                    'id' => $existing->id
-                ]);
-
                 $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
                 if (!in_array($clientId, $syncedClients)) {
                     $syncedClients[] = $clientId;
                 }
-
                 $commonData['synced_clients'] = json_encode($syncedClients);
                 $commonData['updated_at'] = now();
-
-                DB::table('inventaire_details')
-                    ->where('id', $existing->id)
-                    ->update($commonData);
-
-                \Log::info('[SYNC INVENTAIRE DETAILS] ✅ Mise à jour réussie', [
-                    'id' => $existing->id
-                ]);
-
+                DB::table('inventaire_details')->where('id', $existing->id)->update($commonData);
                 return ['success' => true, 'id' => $existing->id];
             }
 
-            // Création nouveau
             $commonData['synced_clients'] = json_encode([$clientId]);
             $commonData['created_at'] = now();
             $commonData['updated_at'] = now();
-
-            \Log::info('[SYNC INVENTAIRE DETAILS] Création nouveau', $commonData);
-
             $id = DB::table('inventaire_details')->insertGetId($commonData);
-
-            \Log::info('[SYNC INVENTAIRE DETAILS] ✅ Création réussie', [
-                'id' => $id,
-                'inventaire_id' => $inventaire_id,
-                'produit_id' => $data['produit_id']
-            ]);
-
             return ['success' => true, 'id' => $id];
 
         } catch (\Exception $e) {
-            \Log::error('[SYNC INVENTAIRE DETAILS] Exception', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+            \Log::error('[SYNC INVENTAIRE DETAILS] Exception', ['message' => $e->getMessage()]);
             return ['success' => false, 'reason' => $e->getMessage()];
         }
     }
 
-    // ========== MÉTHODES PRIVÉES ==========
+    private function syncSession($data, $clientId)
+    {
+        try {
+            $dateOuverture = $this->parseDate($data['date_ouverture'] ?? null);
+            $dateFermeture = isset($data['date_fermeture']) ? $this->parseDate($data['date_fermeture']) : null;
 
-    /**
-     * Récupérer les données non synchronisées pour un client
-     */
-private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additionalWhere = null, $inventaireIds = null)
-{
-    $query = DB::table($table);
-    
-    // Filtre additionnel (ex: actif = true)
-    if ($additionalWhere) {
-        foreach ($additionalWhere as $key => $value) {
-            $query->where($key, $value);
+            $commonData = [
+                'vendeur_id'           => $data['vendeur_id'],
+                'categorie'            => $data['categorie'],
+                'fond_vente'           => $data['fond_vente'] ?? 0,
+                'orange_money_initial' => $data['orange_money_initial'] ?? 0,
+                'mtn_money_initial'    => $data['mtn_money_initial'] ?? 0,
+                'montant_verse'        => $data['montant_verse'] ?? null,
+                'orange_money_final'   => $data['orange_money_final'] ?? null,
+                'mtn_money_final'      => $data['mtn_money_final'] ?? null,
+                'manquant'             => $data['manquant'] ?? null,
+                'statut'               => $data['statut'] ?? 'ouverte',
+                'fermee_par'           => $data['fermee_par'] ?? null,
+                'date_ouverture'       => $dateOuverture,
+                'date_fermeture'       => $dateFermeture,
+            ];
+
+            if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
+                $existing = DB::table('sessions_vente')->find($data['id']);
+                if ($existing) {
+                    $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
+                    if (!in_array($clientId, $syncedClients)) {
+                        $syncedClients[] = $clientId;
+                    }
+                    $commonData['synced_clients'] = json_encode($syncedClients);
+                    $commonData['updated_at'] = now();
+                    DB::table('sessions_vente')->where('id', $data['id'])->update($commonData);
+                    return ['success' => true, 'id' => $data['id']];
+                }
+            }
+
+            $commonData['synced_clients'] = json_encode([$clientId]);
+            $commonData['created_at'] = now();
+            $commonData['updated_at'] = now();
+            $id = DB::table('sessions_vente')->insertGetId($commonData);
+            return ['success' => true, 'id' => $id];
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'reason' => $e->getMessage()];
         }
     }
-    
-    // ✅ Filtre : ignorer les utilisateurs dont le rôle est "pdg"
-    if ($table === 'users') {
-        $query->where('role', '!=', 'pdg');
-    }
-    
-    // Filtre pour inventaire_details
-    if ($inventaireIds !== null) {
-        $query->whereIn('inventaire_id', $inventaireIds);
-    }
-    
-    // ✅ NOUVELLE LOGIQUE: Non synced OU updated_at > last_sync + 1 minutes
-    $query->where(function($q) use ($clientId, $lastSync) {
-        // Condition 1: Non synced par le client (synced_clients null ou ne contient pas ce client_id)
-        $q->where(function($sq) use ($clientId) {
-            $sq->whereNull('synced_clients')
-               ->orWhereRaw("NOT JSON_CONTAINS(synced_clients, '\"$clientId\"')");
-        })
-        // OU Condition 2: updated_at > last_sync + 5 minutes
-        ->orWhere(function($sq) use ($lastSync) {
-            if ($lastSync) {
-                // Ajoute 1 minutes à last_sync
-                $lastSyncPlusOneMin = date('Y-m-d H:i:s', strtotime($lastSync . ' +1 minutes'));
-                $sq->where('updated_at', '>', $lastSyncPlusOneMin);
-            }
-        });
-    });
-    
-    return $query->select($columns)->get();
-}
 
-    /**
-     * Marquer comme synchronisé pour un client spécifique
-     */
+    // ========== HELPERS ==========
+
+    private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additionalWhere = null, $inventaireIds = null)
+    {
+        $query = DB::table($table);
+
+        if ($additionalWhere) {
+            foreach ($additionalWhere as $key => $value) {
+                $query->where($key, $value);
+            }
+        }
+
+        if ($table === 'users') {
+            $query->where('role', '!=', 'pdg');
+        }
+
+        if ($inventaireIds !== null) {
+            $query->whereIn('inventaire_id', $inventaireIds);
+        }
+
+        $query->where(function ($q) use ($clientId, $lastSync) {
+            $q->where(function ($sq) use ($clientId) {
+                $sq->whereNull('synced_clients')
+                   ->orWhereRaw("NOT JSON_CONTAINS(synced_clients, '\"$clientId\"')");
+            })->orWhere(function ($sq) use ($lastSync) {
+                if ($lastSync) {
+                    $lastSyncPlusOneMin = date('Y-m-d H:i:s', strtotime($lastSync . ' +1 minutes'));
+                    $sq->where('updated_at', '>', $lastSyncPlusOneMin);
+                }
+            });
+        });
+
+        return $query->select($columns)->get();
+    }
+
     private function markAsSyncedForClient($table, $ids, $clientId)
     {
         if (empty($ids)) return;
@@ -737,10 +767,8 @@ private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additi
             if (!$record) continue;
 
             $syncedClients = json_decode($record->synced_clients ?? '[]', true);
-            
             if (!in_array($clientId, $syncedClients)) {
                 $syncedClients[] = $clientId;
-                
                 DB::table($table)
                     ->where('id', $id)
                     ->update([
@@ -751,274 +779,11 @@ private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additi
         }
     }
 
-    /**
-     * Synchroniser une réception
-     */
-    private function syncReception($data, $clientId)
-    {
-        try {
-            $dateReception = $this->parseDate($data['date_reception'] ?? null);
-
-            $commonData = [
-                'pointeur_id' => $data['pointeur_id'],
-                'producteur_id' => $data['producteur_id'],
-                'produit_id' => $data['produit_id'],
-                'quantite' => $data['quantite'],
-                'vendeur_assigne_id' => $data['vendeur_assigne_id'] ?? null,
-                'verrou' => $data['verrou'] ?? false,
-                'date_reception' => $dateReception,
-                'notes' => $data['notes'] ?? null,
-            ];
-
-            if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
-                $existing = DB::table('receptions_pointeur')->find($data['id']);
-                
-                if ($existing) {
-                    if ($existing->verrou) {
-                        return ['success' => false, 'reason' => 'Enregistrement verrouillé'];
-                    }
-
-                    $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
-                    if (!in_array($clientId, $syncedClients)) {
-                        $syncedClients[] = $clientId;
-                    }
-
-                    $commonData['synced_clients'] = json_encode($syncedClients);
-                    $commonData['updated_at'] = now();
-
-                    DB::table('receptions_pointeur')
-                        ->where('id', $data['id'])
-                        ->update($commonData);
-
-                    return ['success' => true, 'id' => $data['id']];
-                }
-            }
-
-            // Création
-            $commonData['synced_clients'] = json_encode([$clientId]);
-            $commonData['created_at'] = now();
-            $commonData['updated_at'] = now();
-
-            $id = DB::table('receptions_pointeur')->insertGetId($commonData);
-
-            return ['success' => true, 'id' => $id];
-
-        } catch (\Exception $e) {
-            \Log::error('syncReception error', ['error' => $e->getMessage()]);
-            return ['success' => false, 'reason' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * Synchroniser un retour
-     */
-    private function syncRetour($data, $clientId)
-{
-    try {
-        // 🔹 Étape 1 : Log des données brutes reçues
-        \Log::info('[SYNC RETOUR] Début de la synchronisation', [
-            'client_id' => $clientId,
-            'payload' => $data
-        ]);
-
-        // 🔹 Étape 2 : Validation de la date
-        $dateRetour = $this->parseDate($data['date_retour'] ?? null);
-        \Log::debug('[SYNC RETOUR] Date retour parsée', ['date_retour' => $dateRetour]);
-
-        // 🔹 Étape 3 : Construction des données communes
-        $commonData = [
-            'pointeur_id'  => $data['pointeur_id'] ?? null,
-            'vendeur_id'   => $data['vendeur_id'] ?? null,
-            'produit_id'   => $data['produit_id'] ?? null,
-            'quantite'     => $data['quantite'] ?? null,
-            'raison'       => $data['raison'] ?? null,
-            'description'  => $data['description'] ?? null,
-            'verrou'       => $data['verrou'] ?? false,
-            'date_retour'  => $dateRetour,
-        ];
-
-        \Log::debug('[SYNC RETOUR] Données communes préparées', $commonData);
-
-        // 🔹 Étape 4 : Cas mise à jour d’un retour existant
-        if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
-            \Log::info('[SYNC RETOUR] Tentative de mise à jour', ['id' => $data['id']]);
-
-            $existing = DB::table('retours_produits')->find($data['id']);
-
-            if ($existing) {
-                if ($existing->verrou) {
-                    \Log::warning('[SYNC RETOUR] Enregistrement verrouillé, mise à jour annulée', [
-                        'id' => $data['id']
-                    ]);
-                    return ['success' => false, 'reason' => 'Verrouillé'];
-                }
-
-                // 🔹 Gestion de la synchronisation client
-                $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
-                if (!in_array($clientId, $syncedClients)) {
-                    $syncedClients[] = $clientId;
-                    \Log::debug('[SYNC RETOUR] Ajout du client à synced_clients', [
-                        'id' => $data['id'],
-                        'synced_clients' => $syncedClients
-                    ]);
-                }
-
-                $commonData['synced_clients'] = json_encode($syncedClients);
-                $commonData['updated_at'] = now();
-
-                DB::table('retours_produits')->where('id', $data['id'])->update($commonData);
-                \Log::info('[SYNC RETOUR] Mise à jour réussie', [
-                    'id' => $data['id'],
-                    'client_id' => $clientId
-                ]);
-
-                return ['success' => true, 'id' => $data['id']];
-            } else {
-                \Log::warning('[SYNC RETOUR] Aucun enregistrement trouvé avec cet ID', [
-                    'id' => $data['id']
-                ]);
-            }
-        }
-
-        // 🔹 Étape 5 : Cas création d’un nouveau retour
-        $commonData['synced_clients'] = json_encode([$clientId]);
-        $commonData['created_at'] = now();
-        $commonData['updated_at'] = now();
-
-        \Log::info('[SYNC RETOUR] Création d’un nouveau retour', $commonData);
-
-        $id = DB::table('retours_produits')->insertGetId($commonData);
-
-        \Log::info('[SYNC RETOUR] Création réussie', [
-            'id' => $id,
-            'client_id' => $clientId
-        ]);
-
-        return ['success' => true, 'id' => $id];
-
-    } catch (\Exception $e) {
-        // 🔹 Étape 6 : Log d’erreur détaillé
-        \Log::error('[SYNC RETOUR] Exception critique', [
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'data' => $data,
-            'client_id' => $clientId
-        ]);
-
-        return ['success' => false, 'reason' => $e->getMessage()];
-    }
-}
-
-    /**
-     * Synchroniser une session
-     */
-    private function syncSession($data, $clientId)
-    {
-        try {
-            $dateOuverture = $this->parseDate($data['date_ouverture'] ?? null);
-            $dateFermeture = isset($data['date_fermeture']) ? $this->parseDate($data['date_fermeture']) : null;
-
-            $commonData = [
-                'vendeur_id' => $data['vendeur_id'],
-                'categorie' => $data['categorie'],
-                'fond_vente' => $data['fond_vente'] ?? 0,
-                'orange_money_initial' => $data['orange_money_initial'] ?? 0,
-                'mtn_money_initial' => $data['mtn_money_initial'] ?? 0,
-                'montant_verse' => $data['montant_verse'] ?? null,
-                'orange_money_final' => $data['orange_money_final'] ?? null,
-                'mtn_money_final' => $data['mtn_money_final'] ?? null,
-                'manquant' => $data['manquant'] ?? null,
-                'statut' => $data['statut'] ?? 'ouverte',
-                'fermee_par' => $data['fermee_par'] ?? null,
-                'date_ouverture' => $dateOuverture,
-                'date_fermeture' => $dateFermeture,
-            ];
-
-            if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
-                $existing = DB::table('sessions_vente')->find($data['id']);
-                
-                if ($existing) {
-                    $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
-                    if (!in_array($clientId, $syncedClients)) {
-                        $syncedClients[] = $clientId;
-                    }
-
-                    $commonData['synced_clients'] = json_encode($syncedClients);
-                    $commonData['updated_at'] = now();
-
-                    DB::table('sessions_vente')->where('id', $data['id'])->update($commonData);
-                    return ['success' => true, 'id' => $data['id']];
-                }
-            }
-
-            $commonData['synced_clients'] = json_encode([$clientId]);
-            $commonData['created_at'] = now();
-            $commonData['updated_at'] = now();
-
-            $id = DB::table('sessions_vente')->insertGetId($commonData);
-            return ['success' => true, 'id' => $id];
-
-        } catch (\Exception $e) {
-            return ['success' => false, 'reason' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * Synchroniser une vente
-     */
-    private function syncVente($data, $clientId)
-    {
-        try {
-            $dateVente = $this->parseDate($data['date_vente'] ?? null);
-
-            $commonData = [
-                'session_vente_id' => $data['session_vente_id'],
-                'produit_id' => $data['produit_id'],
-                'quantite' => $data['quantite'],
-                'prix_unitaire' => $data['prix_unitaire'],
-                'montant_total' => $data['montant_total'],
-                'mode_paiement' => $data['mode_paiement'] ?? 'cash',
-                'date_vente' => $dateVente,
-            ];
-
-            if (isset($data['id']) && is_numeric($data['id']) && $data['id'] > 0) {
-                $existing = DB::table('ventes')->find($data['id']);
-                
-                if ($existing) {
-                    $syncedClients = json_decode($existing->synced_clients ?? '[]', true);
-                    if (!in_array($clientId, $syncedClients)) {
-                        $syncedClients[] = $clientId;
-                    }
-
-                    $commonData['synced_clients'] = json_encode($syncedClients);
-                    $commonData['updated_at'] = now();
-
-                    DB::table('ventes')->where('id', $data['id'])->update($commonData);
-                    return ['success' => true, 'id' => $data['id']];
-                }
-            }
-
-            $commonData['synced_clients'] = json_encode([$clientId]);
-            $commonData['created_at'] = now();
-            $commonData['updated_at'] = now();
-
-            $id = DB::table('ventes')->insertGetId($commonData);
-            return ['success' => true, 'id' => $id];
-
-        } catch (\Exception $e) {
-            return ['success' => false, 'reason' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * Parser une date ISO 8601 vers format MySQL
-     */
     private function parseDate($dateString)
     {
         if (!$dateString) {
             return Carbon::now('Africa/Douala')->format('Y-m-d H:i:s');
         }
-
         try {
             return Carbon::parse($dateString)
                 ->setTimezone('Africa/Douala')
@@ -1026,5 +791,10 @@ private function getUnsyncedData($table, $clientId, $lastSync, $columns, $additi
         } catch (\Exception $e) {
             return Carbon::now('Africa/Douala')->format('Y-m-d H:i:s');
         }
+    }
+
+    public function status(Request $request)
+    {
+        return response()->json(['success' => true, 'status' => 'ok']);
     }
 }

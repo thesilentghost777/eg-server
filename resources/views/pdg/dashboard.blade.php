@@ -63,7 +63,7 @@
                 </div>
             </a>
 
-            <a href="{{ route('retours.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+            <a href="{{ route('pdg.retours') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
                 <div class="flex items-center space-x-4">
                     <div class="bg-purple-100 w-14 h-14 rounded-xl flex items-center justify-center">
                         <i class="fas fa-undo text-2xl text-purple-600"></i>
@@ -74,6 +74,30 @@
                     </div>
                 </div>
             </a>
+
+            <a href="{{ route('pdg.raisons-retour.index') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-pink-100 w-14 h-14 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-2xl text-pink-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Raisons des Retours' : 'Return Reasons' }}</h3>
+                        <p class="text-gray-500 text-sm">{{ $isFrench ? 'Gérer les raisons des retours' : 'Manage return reasons' }}</p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{{ route('pdg.manquants') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-red-100 w-14 h-14 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-exclamation-circle text-2xl text-red-600"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg text-gray-800">{{ $isFrench ? 'Manquants' : 'Shortages' }}</h3>
+                            <p class="text-gray-500 text-sm">{{ $isFrench ? 'Gérer les manquants' : 'Manage missings' }}</p>
+                        </div>
+                    </div>
+                </a>
 
             <a href="{{ route('pdg.flux.form') }}" class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all transform hover:scale-105">
                 <div class="flex items-center space-x-4">

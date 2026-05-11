@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Services\ProduitService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use App\Models\PrixProduitHistorique;
+
 
 class ProduitController extends Controller
 {
@@ -145,42 +148,66 @@ class ProduitController extends Controller
         return view('produits.edit', compact('produit'));
     }
 
+
     public function update(Request $request, $id)
-{
-    $validated = $request->validate([
-        'nom'       => 'required|string|max:255',
-        'prix'      => 'required|numeric|min:0',
-        'categorie' => 'required|in:boulangerie,patisserie',
-        'actif'     => 'sometimes|boolean',
-    ]);
+    {
+        $validated = $request->validate([
+            'nom'       => 'required|string|max:255',
+            'prix'      => 'required|numeric|min:0',
+            'categorie' => 'required|in:boulangerie,patisserie',
+            'actif'     => 'sometimes|boolean',
+        ]);
 
-    try {
-        $produit = $this->produitService->updateProduit($id, $validated);
+        try {
+            DB::beginTransaction();
 
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Produit modifié avec succès',
-                'data'    => $produit
-            ]);
+            // Mise à jour du produit via le service (ou directement)
+            $produit = $this->produitService->updateProduit($id, $validated);
+
+            // Si le prix a changé, on gère l'historique
+            if ($produit->wasChanged('prix')) {
+                // 1. Clôturer l'historique actif
+                PrixProduitHistorique::where('produit_id', $produit->id)
+                    ->whereNull('date_fin')
+                    ->update(['date_fin' => now()]);
+
+                // 2. Créer la nouvelle version du prix
+                PrixProduitHistorique::create([
+                    'produit_id' => $produit->id,
+                    'prix'       => $produit->prix,
+                    'date_debut' => now(),
+                    'date_fin'   => null,
+                ]);
+            }
+
+            DB::commit();
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Produit modifié avec succès',
+                    'data'    => $produit
+                ]);
+            }
+
+            return redirect()->route('produits.index')
+                ->with('success', 'Produit modifié avec succès');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ], 422);
+            }
+
+            return back()
+                ->withInput()
+                ->withErrors(['error' => $e->getMessage()]);
         }
-
-        return redirect()->route('produits.index')
-            ->with('success', 'Produit modifié avec succès');
-
-    } catch (\Exception $e) {
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 422);
-        }
-
-        return back()
-            ->withInput()
-            ->withErrors(['error' => $e->getMessage()]);
     }
-}
 
     public function toggleActif($id)
     {
